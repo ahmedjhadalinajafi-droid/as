@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:hijri/hijri_calendar.dart';
+import '../../utils/hijri_utils.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_card.dart';
@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hijri = HijriCalendar.now();
+    final hijri = HijriDate.now();
     final prayerService = context.watch<PrayerService>();
 
     return Scaffold(
@@ -85,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHeader(HijriCalendar hijri, PrayerService prayerService) {
+  Widget _buildHeader(HijriDate hijri, PrayerService prayerService) {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -166,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           children: [
                             Text(
-                              '${hijri.hDay} ${hijri.longMonthName}',
+                              '${hijri.day} ${hijri.longMonthName}',
                               style: const TextStyle(
                                 color: AppTheme.gold,
                                 fontWeight: FontWeight.bold,
@@ -174,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             Text(
-                              '${hijri.hYear} AH',
+                              '${hijri.year} AH',
                               style: const TextStyle(
                                   color: Colors.white54, fontSize: 10),
                             ),
