@@ -68,7 +68,7 @@ class PrayerService extends ChangeNotifier {
       await prefs.setString(_cityKey, _cityName);
 
       final coordinates = Coordinates(lat, lon);
-      final params = CalculationMethod.muslimWorldLeague().getParameters();
+      final params = CalculationMethod.muslimWorldLeague.getParameters();
       params.madhab = Madhab.shafi;
       final dateComponents = DateComponents.from(DateTime.now());
       final pt = PrayerTimes(coordinates, dateComponents, params);
