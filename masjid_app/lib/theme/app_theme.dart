@@ -7,6 +7,7 @@ class AppTheme {
   static const Color navyDark = Color(0xFF0F3251);   // darker variant
   static const Color gold = Color(0xFFC9A84C);        // warm gold from logo line
   static const Color goldLight = Color(0xFFE2C06E);
+  static const Color primaryGreen = Color(0xFF4CAF50);
 
   // Dark theme palette
   static const Color bgDark = Color(0xFF06111E);
