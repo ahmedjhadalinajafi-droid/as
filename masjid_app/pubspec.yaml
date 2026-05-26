@@ -13,7 +13,7 @@ dependencies:
   # Islamic features
   adhan: ^1.1.2
   hijri: ^2.0.1
-  quran: ^2.1.0
+  quran: any
 
   # Location & compass
   geolocator: ^11.0.0
