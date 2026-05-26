@@ -12,6 +12,7 @@ class AppTheme {
   // Dark theme palette
   static const Color bgDark = Color(0xFF06111E);
   static const Color surfaceDark = Color(0xFF0D1F33);
+  static const Color surface = surfaceDark;
   static const Color surfaceVariant = Color(0xFF122840);
   static const Color textSecondary = Color(0xFF90A4AE);
 
