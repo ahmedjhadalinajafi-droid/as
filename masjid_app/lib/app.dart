@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'navigation/main_nav.dart';
+import 'providers/theme_provider.dart';
 import 'services/proximity_service.dart';
 import 'screens/ziyara/ziyara_screen.dart';
 
@@ -10,10 +11,13 @@ class MasjidApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
     return MaterialApp(
-      title: 'Masjid',
+      title: 'مسجد أهل البيت والحسينية',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      themeMode: themeProvider.themeMode,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
       home: const _AppRoot(),
     );
   }
@@ -41,15 +45,11 @@ class _AppRootState extends State<_AppRoot> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: AppTheme.surfaceDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           'أنت قريب من مرقد الإمام علي (ع)',
-          style: TextStyle(
-            color: AppTheme.gold,
-            fontSize: 18,
-            fontFamily: 'serif',
-          ),
+          style: TextStyle(color: AppTheme.gold, fontSize: 18),
           textAlign: TextAlign.center,
         ),
         content: const Text(

@@ -5,6 +5,7 @@ import 'app.dart';
 import 'services/prayer_service.dart';
 import 'services/notification_service.dart';
 import 'services/proximity_service.dart';
+import 'providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => PrayerService()),
         ChangeNotifierProvider(create: (_) => ProximityService()),
       ],

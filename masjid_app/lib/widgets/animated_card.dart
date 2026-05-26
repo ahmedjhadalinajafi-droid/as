@@ -22,6 +22,8 @@ class AnimatedFeatureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -29,54 +31,59 @@ class AnimatedFeatureCard extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              AppTheme.surface,
-              AppTheme.surfaceVariant,
-            ],
+            colors: isDark
+                ? [AppTheme.surfaceDark, AppTheme.surfaceVariant]
+                : [AppTheme.surfaceLight, AppTheme.surfaceVariantLight],
           ),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: AppTheme.gold.withOpacity(0.15),
+            color: AppTheme.gold.withOpacity(isDark ? 0.15 : 0.25),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.12),
+                  color: iconColor.withOpacity(0.13),
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: iconColor.withOpacity(0.2),
+                    width: 1,
+                  ),
                 ),
-                child: Icon(icon, color: iconColor, size: 26),
+                child: Icon(icon, color: iconColor, size: 24),
               ),
               const SizedBox(height: 10),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark ? Colors.white : const Color(0xFF0D1F33),
                   fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                  fontSize: 12,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 11,
+                style: TextStyle(
+                  color: isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight,
+                  fontSize: 10,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,

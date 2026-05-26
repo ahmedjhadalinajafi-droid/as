@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:hijri/hijri_calendar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_theme.dart';
 
 class HijriCalendarScreen extends StatefulWidget {
@@ -13,12 +15,28 @@ class HijriCalendarScreen extends StatefulWidget {
 class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   late HijriCalendar _current;
   final HijriCalendar _today = HijriCalendar.now();
+  // key = "year-month-day", value = note text
+  Map<String, String> _userEvents = {};
 
   @override
   void initState() {
     super.initState();
     _current = HijriCalendar.now();
+    _loadUserEvents();
   }
+
+  Future<void> _loadUserEvents() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('hijri_events') ?? '{}';
+    setState(() => _userEvents = Map<String, String>.from(jsonDecode(raw)));
+  }
+
+  Future<void> _saveUserEvents() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('hijri_events', jsonEncode(_userEvents));
+  }
+
+  String _dayKey(int y, int m, int d) => '$y-$m-$d';
 
   void _prevMonth() {
     setState(() {
@@ -53,35 +71,82 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   }
 
   int _daysInMonth(int year, int month) {
-    // Hijri months alternate between 29 and 30 days
     return (month % 2 == 1 || (month == 12 && _isLeapYear(year))) ? 30 : 29;
   }
 
   bool _isLeapYear(int year) => (year * 11 + 14) % 30 < 11;
 
-  bool _isSpecialDay(int day, int month) {
-    // Mark special Islamic days
+  bool _isIslamicOccasion(int day, int month) {
     final special = {
-      1: [1, 10], // Muharram: New Year (1), Ashura (10)
-      3: [12], // Rabi al-Awwal: Mawlid (12)
-      7: [27], // Rajab: Isra & Mi'raj (27)
-      8: [15], // Sha'ban: Mid-Sha'ban (15)
-      9: [1, 21, 23, 27], // Ramadan: Start, Laylat al-Qadr candidates
-      10: [1], // Shawwal: Eid al-Fitr (1)
-      12: [10], // Dhul Hijjah: Eid al-Adha (10)
+      1: [1, 10],
+      3: [12],
+      7: [27],
+      8: [15],
+      9: [1, 21, 23, 27],
+      10: [1],
+      12: [10],
     };
     return special[month]?.contains(day) ?? false;
+  }
+
+  String? _occasionName(int day, int month) {
+    final Map<String, String> occasions = {
+      '1-1': 'Islamic New Year',
+      '1-10': 'Ashura',
+      '3-12': "Mawlid al-Nabi ﷺ",
+      '7-27': "Isra' & Mi'raj",
+      '8-15': 'Mid-Sha\'ban',
+      '9-1': 'First of Ramadan',
+      '9-27': 'Laylat al-Qadr',
+      '10-1': 'Eid al-Fitr',
+      '12-10': 'Eid al-Adha',
+    };
+    return occasions['$month-$day'];
+  }
+
+  void _onDayTap(int day) {
+    final key = _dayKey(_current.hYear, _current.hMonth, day);
+    final existing = _userEvents[key];
+    final controller = TextEditingController(text: existing ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EventBottomSheet(
+        day: day,
+        month: _current.hMonth,
+        year: _current.hYear,
+        monthName: _current.longMonthName,
+        controller: controller,
+        occasionName: _occasionName(day, _current.hMonth),
+        existingNote: existing,
+        onSave: (text) async {
+          setState(() {
+            if (text.isEmpty) {
+              _userEvents.remove(key);
+            } else {
+              _userEvents[key] = text;
+            }
+          });
+          await _saveUserEvents();
+        },
+        onDelete: () async {
+          setState(() => _userEvents.remove(key));
+          await _saveUserEvents();
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final daysInMonth = _daysInMonth(_current.hYear, _current.hMonth);
-    // Get the first day's weekday offset (simplified: start from 0)
-    final firstDayOffset = HijriCalendar()
+    final firstDay = HijriCalendar()
       ..hYear = _current.hYear
       ..hMonth = _current.hMonth
       ..hDay = 1;
-    final startWeekday = firstDayOffset.getDayOfWeek();
+    final startWeekday = firstDay.getDayOfWeek();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Hijri Calendar')),
@@ -94,7 +159,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
                 .animate()
                 .fadeIn(duration: 300.ms),
           ),
-          _buildSpecialDaysKey(),
+          _buildLegend(),
         ],
       ),
     );
@@ -102,7 +167,7 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       child: Row(
         children: [
           IconButton(
@@ -161,110 +226,265 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
   }
 
   Widget _buildGrid(int daysInMonth, int startWeekday) {
-    final cells = startWeekday + daysInMonth;
-    final rows = (cells / 7).ceil();
+    final rows = ((startWeekday + daysInMonth) / 7).ceil();
 
     return GridView.builder(
       padding: const EdgeInsets.all(8),
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7,
-        childAspectRatio: 1,
+        childAspectRatio: 0.9,
       ),
       itemCount: rows * 7,
       itemBuilder: (context, i) {
         final day = i - startWeekday + 1;
-        if (day < 1 || day > daysInMonth) {
-          return const SizedBox.shrink();
-        }
+        if (day < 1 || day > daysInMonth) return const SizedBox.shrink();
 
         final isToday = _today.hYear == _current.hYear &&
             _today.hMonth == _current.hMonth &&
             _today.hDay == day;
-        final isSpecial = _isSpecialDay(day, _current.hMonth);
+        final isOccasion = _isIslamicOccasion(day, _current.hMonth);
         final isFriday = (i % 7) == 5;
+        final hasNote = _userEvents.containsKey(
+            _dayKey(_current.hYear, _current.hMonth, day));
 
-        return Container(
-          margin: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: isToday
-                ? AppTheme.primaryGreen
-                : isSpecial
-                    ? AppTheme.gold.withOpacity(0.15)
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: isToday
-                ? Border.all(color: AppTheme.gold, width: 1.5)
-                : isSpecial
-                    ? Border.all(color: AppTheme.gold.withOpacity(0.3))
-                    : null,
-          ),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '$day',
-                style: TextStyle(
-                  color: isToday
-                      ? Colors.white
-                      : isFriday
-                          ? AppTheme.gold
-                          : isSpecial
-                              ? AppTheme.gold
-                              : Colors.white70,
-                  fontWeight:
-                      isToday || isSpecial ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 13,
-                ),
-              ),
-              if (isSpecial)
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppTheme.gold,
+        return GestureDetector(
+          onTap: () => _onDayTap(day),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: isToday
+                  ? AppTheme.navyBlue
+                  : isOccasion
+                      ? AppTheme.gold.withOpacity(0.12)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isToday
+                  ? Border.all(color: AppTheme.gold, width: 1.5)
+                  : isOccasion
+                      ? Border.all(color: AppTheme.gold.withOpacity(0.3))
+                      : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$day',
+                  style: TextStyle(
+                    color: isToday
+                        ? Colors.white
+                        : isFriday || isOccasion
+                            ? AppTheme.gold
+                            : Colors.white70,
+                    fontWeight: isToday || isOccasion
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    fontSize: 13,
                   ),
                 ),
-            ],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (isOccasion)
+                      Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.gold,
+                        ),
+                      ),
+                    if (hasNote) ...[
+                      if (isOccasion) const SizedBox(width: 2),
+                      Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF4CAF50),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildSpecialDaysKey() {
+  Widget _buildLegend() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppTheme.gold,
-            ),
-          ),
-          const SizedBox(width: 6),
-          const Text('Islamic occasion',
-              style: TextStyle(color: Colors.white54, fontSize: 11)),
-          const SizedBox(width: 20),
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppTheme.primaryGreen,
-              border: Border.all(color: AppTheme.gold, width: 1.5),
-            ),
-          ),
-          const SizedBox(width: 6),
-          const Text('Today',
-              style: TextStyle(color: Colors.white54, fontSize: 11)),
+          _LegendDot(color: AppTheme.navyBlue, label: 'Today'),
+          const SizedBox(width: 16),
+          _LegendDot(color: AppTheme.gold, label: 'Islamic occasion'),
+          const SizedBox(width: 16),
+          _LegendDot(color: const Color(0xFF4CAF50), label: 'Your note'),
         ],
+      ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _LegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 5),
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+      ],
+    );
+  }
+}
+
+class _EventBottomSheet extends StatefulWidget {
+  final int day;
+  final int month;
+  final int year;
+  final String monthName;
+  final TextEditingController controller;
+  final String? occasionName;
+  final String? existingNote;
+  final Future<void> Function(String) onSave;
+  final Future<void> Function() onDelete;
+
+  const _EventBottomSheet({
+    required this.day,
+    required this.month,
+    required this.year,
+    required this.monthName,
+    required this.controller,
+    required this.onSave,
+    required this.onDelete,
+    this.occasionName,
+    this.existingNote,
+  });
+
+  @override
+  State<_EventBottomSheet> createState() => _EventBottomSheetState();
+}
+
+class _EventBottomSheetState extends State<_EventBottomSheet> {
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: AppTheme.surfaceDark,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '${widget.day} ${widget.monthName} ${widget.year} AH',
+              style: const TextStyle(
+                color: AppTheme.gold,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            if (widget.occasionName != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.star_rounded, color: AppTheme.gold, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    widget.occasionName!,
+                    style: const TextStyle(color: Colors.white60, fontSize: 13),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: widget.controller,
+              maxLines: 3,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Add a note or event for this day...',
+                labelText: 'Note / Event',
+                labelStyle: TextStyle(color: AppTheme.textSecondary),
+              ),
+              style: const TextStyle(color: Colors.white),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                if (widget.existingNote != null)
+                  TextButton.icon(
+                    onPressed: () async {
+                      await widget.onDelete();
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    icon: const Icon(Icons.delete_rounded,
+                        size: 16, color: Colors.redAccent),
+                    label: const Text('Delete',
+                        style: TextStyle(color: Colors.redAccent)),
+                  ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: Colors.white54)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _saving
+                      ? null
+                      : () async {
+                          setState(() => _saving = true);
+                          await widget.onSave(widget.controller.text.trim());
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                  child: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
