@@ -1,0 +1,45 @@
+name: masjid_app
+description: A full-featured Islamic Masjid app for Android, iOS, and macOS.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Islamic features
+  adhan: ^1.1.2
+  hijri: ^2.0.2
+  quran: ^2.1.2
+
+  # Location & compass
+  geolocator: ^13.0.2
+  flutter_qiblah: ^2.0.1
+
+  # UI & animations
+  flutter_animate: ^4.5.0
+  google_fonts: ^6.2.1
+
+  # State management
+  provider: ^6.1.2
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Notifications
+  flutter_local_notifications: ^17.2.3
+
+  # Utilities
+  intl: ^0.19.0
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
