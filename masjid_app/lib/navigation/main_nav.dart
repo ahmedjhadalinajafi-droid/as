@@ -6,7 +6,6 @@ import '../providers/theme_provider.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer_times/prayer_times_screen.dart';
 import '../screens/quran/quran_screen.dart';
-import '../screens/qibla/qibla_screen.dart';
 import '../screens/more/more_screen.dart';
 import '../screens/settings/settings_screen.dart';
 
@@ -24,7 +23,6 @@ class _MainNavState extends State<MainNav> {
     HomeScreen(),
     PrayerTimesScreen(),
     QuranScreen(),
-    QiblaScreen(),
     MoreScreen(),
   ];
 
@@ -76,10 +74,6 @@ class _MainNavState extends State<MainNav> {
                   BottomNavigationBarItem(
                     icon: Icon(Icons.menu_book_rounded),
                     label: 'Quran',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.explore_rounded),
-                    label: 'Qibla',
                   ),
                   BottomNavigationBarItem(
                     icon: Icon(Icons.grid_view_rounded),

@@ -10,7 +10,6 @@ import '../../services/prayer_service.dart';
 import '../../providers/theme_provider.dart';
 import '../prayer_times/prayer_times_screen.dart';
 import '../quran/quran_screen.dart';
-import '../qibla/qibla_screen.dart';
 import '../mafatih/mafatih_screen.dart';
 import '../hijri_calendar/hijri_calendar_screen.dart';
 import '../donations/donations_screen.dart';
@@ -281,11 +280,6 @@ class _HomeScreenState extends State<HomeScreen> {
         const Color(0xFF4CAF50),
         () => Navigator.push(
             context, MaterialPageRoute(builder: (_) => const QuranScreen()))
-      ),
-      (
-        'Qibla', 'القبلة', Icons.explore_rounded, const Color(0xFF42A5F5),
-        () => Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const QiblaScreen()))
       ),
       (
         'Mafatih', 'مفاتيح الجنان', Icons.auto_stories_rounded,
