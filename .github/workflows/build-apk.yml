@@ -1,0 +1,56 @@
+name: Build Masjid APK
+
+on:
+  push:
+    branches:
+      - claude/android-app-build-w4fyk
+      - main
+  workflow_dispatch: # allows manual trigger from GitHub website
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.1'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        working-directory: masjid_app
+        run: flutter pub get
+
+      - name: Analyze code
+        working-directory: masjid_app
+        run: flutter analyze --no-fatal-infos
+        continue-on-error: true
+
+      - name: Build APK (debug — no signing needed)
+        working-directory: masjid_app
+        run: flutter build apk --debug --no-tree-shake-icons
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: masjid-app-apk
+          path: masjid_app/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
+
+      - name: Show APK info
+        working-directory: masjid_app
+        run: |
+          echo "✅ APK built successfully!"
+          ls -lh build/app/outputs/flutter-apk/
