@@ -102,13 +102,22 @@ class PrayerService extends ChangeNotifier {
     }
   }
 
+  int _prayerIndex(Prayer p) {
+    const order = [
+      Prayer.fajr, Prayer.sunrise, Prayer.dhuhr,
+      Prayer.asr, Prayer.maghrib, Prayer.isha
+    ];
+    return order.indexOf(p);
+  }
+
   void _buildFromTimes(List<DateTime> times, Prayer next) {
+    final nextIdx = _prayerIndex(next);
     _prayers = List.generate(6, (i) {
       return PrayerTimeModel(
         name: prayerNames[i],
         arabicName: prayerArabic[i],
         time: times[i],
-        isNext: i == next.index,
+        isNext: i == nextIdx,
       );
     });
     _updateNext();

@@ -49,8 +49,12 @@ class _SurahDetailScreenState extends State<SurahDetailScreen> {
           if (i == 0) return _buildBismillah();
           final ayah = i;
           final arabic = quran.getVerse(widget.surah.number, ayah);
-          final translation =
-              quran.getVerseTranslation(widget.surah.number, ayah);
+          String translation = '';
+          try {
+            translation = quran.getVerseTranslation(widget.surah.number, ayah);
+          } catch (_) {
+            translation = '';
+          }
 
           return _AyahCard(
             ayahNumber: ayah,

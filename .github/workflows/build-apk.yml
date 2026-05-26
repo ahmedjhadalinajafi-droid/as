@@ -22,31 +22,28 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Flutter (latest stable)
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
 
-      - name: Flutter version info
+      - name: Flutter version
         run: flutter --version
+
+      - name: Check project folder
+        run: ls -la masjid_app/
 
       - name: Install dependencies
         working-directory: masjid_app
-        run: flutter pub get
+        run: flutter pub get --verbose
 
       - name: Build debug APK
         working-directory: masjid_app
-        run: |
-          flutter build apk \
-            --debug \
-            --no-tree-shake-icons \
-            --suppress-analytics
+        run: flutter build apk --debug --no-tree-shake-icons --suppress-analytics --verbose
 
       - name: Rename APK
-        run: |
-          mv masjid_app/build/app/outputs/flutter-apk/app-debug.apk \
-             masjid_app/build/app/outputs/flutter-apk/MasjidAhlulBayt.apk
+        run: mv masjid_app/build/app/outputs/flutter-apk/app-debug.apk masjid_app/build/app/outputs/flutter-apk/MasjidAhlulBayt.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -54,8 +51,3 @@ jobs:
           name: MasjidAhlulBayt-APK
           path: masjid_app/build/app/outputs/flutter-apk/MasjidAhlulBayt.apk
           retention-days: 30
-
-      - name: Done
-        run: |
-          echo "✅ APK ready to download!"
-          ls -lh masjid_app/build/app/outputs/flutter-apk/
