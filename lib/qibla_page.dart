@@ -49,9 +49,10 @@ class _QiblaPageState extends State<QiblaPage> {
 
     try {
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
-      );
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      ).timeout(const Duration(seconds: 15));
       final angle = _calcQibla(pos.latitude, pos.longitude);
       if (mounted) {
         setState(() {
