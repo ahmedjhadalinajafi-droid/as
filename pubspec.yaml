@@ -1,0 +1,65 @@
+name: masjid_app
+description: مسجد وحسينية أهل البيت - بغداد - المنصور
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Firebase
+  firebase_core: ^2.24.0
+  cloud_firestore: ^4.14.0
+  firebase_storage: ^11.6.0
+  firebase_messaging: ^14.7.0
+
+  # Local Notifications
+  flutter_local_notifications: ^16.3.0
+  timezone: ^0.9.2
+
+  # Location & Compass
+  geolocator: ^11.0.0
+  flutter_compass: ^0.8.0
+  permission_handler: ^11.3.0
+
+  # Media
+  image_picker: ^1.0.7
+  cached_network_image: ^3.3.1
+  just_audio: ^0.9.36
+  audio_session: ^0.1.18
+
+  # Calendar & Date
+  hijri: ^2.0.1
+  intl: ^0.18.1
+
+  # Storage & State
+  shared_preferences: ^2.2.2
+  provider: ^6.1.1
+
+  # Home Widget
+  home_widget: ^0.4.1
+
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/quran.json
+    - assets/mafatih.json
+    - assets/prayer_times_2026.json
+
+  fonts:
+    - family: ScheherazadeNew
+      fonts:
+        - asset: assets/fonts/ScheherazadeNew-Regular.ttf

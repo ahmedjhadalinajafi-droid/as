@@ -1,0 +1,601 @@
+import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'announcements_page.dart';
+import 'hijri_calendar_page.dart';
+import 'mafatih_page.dart';
+import 'notification_service.dart';
+import 'prayer_times_page.dart';
+import 'qibla_page.dart';
+import 'quran_page.dart';
+import 'ziyarat_page.dart';
+
+// ─── Theme Provider ───────────────────────────────────────────────────────────
+
+class ThemeProvider extends ChangeNotifier {
+  bool _isDark = false;
+  bool get isDark => _isDark;
+
+  ThemeProvider() {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isDark = prefs.getBool('dark_mode') ?? false;
+    notifyListeners();
+  }
+
+  Future<void> toggle() async {
+    _isDark = !_isDark;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('dark_mode', _isDark);
+    notifyListeners();
+  }
+}
+
+// ─── Entry Point ─────────────────────────────────────────────────────────────
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: const FirebaseOptions(
+      apiKey: 'AIzaSyATN8cckOCKAt-DZtxgHcovH_J7hf2wBK0',
+      authDomain: 'masjid-405c1.firebaseapp.com',
+      projectId: 'masjid-405c1',
+      storageBucket: 'masjid-405c1.firebasestorage.app',
+      messagingSenderId: '658803064168',
+      appId: '1:658803064168:web:410dacdec0e839da54eadd',
+    ),
+  );
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  await NotificationService().initialize();
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const MasjidApp(),
+    ),
+  );
+}
+
+// ─── Root App ─────────────────────────────────────────────────────────────────
+
+class MasjidApp extends StatelessWidget {
+  const MasjidApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.watch<ThemeProvider>();
+    return MaterialApp(
+      title: 'مسجد وحسينية أهل البيت',
+      debugShowCheckedModeBanner: false,
+      locale: const Locale('ar'),
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
+      home: const MainShell(),
+    );
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    const green = Color(0xFF1B5E20);
+    return ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: green,
+        brightness: brightness,
+      ),
+      fontFamily: 'ScheherazadeNew',
+      appBarTheme: const AppBarTheme(
+        centerTitle: true,
+        backgroundColor: green,
+        foregroundColor: Colors.white,
+        elevation: 2,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        indicatorColor: green.withOpacity(0.2),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? green
+                : Colors.grey,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            color: states.contains(WidgetState.selected)
+                ? green
+                : Colors.grey,
+            fontFamily: 'ScheherazadeNew',
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Main Shell with Bottom Nav ──────────────────────────────────────────────
+
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  int _currentIndex = 0;
+
+  final List<Widget> _pages = const [
+    HomePage(),
+    QuranPage(),
+    PrayerTimesPage(),
+    MorePage(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        body: IndexedStack(index: _currentIndex, children: _pages),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (i) => setState(() => _currentIndex = i),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'الرئيسية',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.menu_book_outlined),
+              selectedIcon: Icon(Icons.menu_book),
+              label: 'القرآن',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.access_time_outlined),
+              selectedIcon: Icon(Icons.access_time_filled),
+              label: 'الصلاة',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.grid_view_outlined),
+              selectedIcon: Icon(Icons.grid_view),
+              label: 'المزيد',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Home Page ────────────────────────────────────────────────────────────────
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  Map<String, String> _todayPrayers = {};
+  String _nextPrayer = '';
+  String _nextPrayerTime = '';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrayerTimes();
+  }
+
+  Future<void> _loadPrayerTimes() async {
+    // Try Firebase first
+    try {
+      final today = _todayKey();
+      final doc = await FirebaseFirestore.instance
+          .collection('prayer_times')
+          .doc(today)
+          .get()
+          .timeout(const Duration(seconds: 5));
+      if (doc.exists && doc.data() != null) {
+        _setPrayerTimes(Map<String, String>.from(
+            doc.data()!.map((k, v) => MapEntry(k, v.toString()))));
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback to local JSON
+    try {
+      final raw = await rootBundle.loadString('assets/prayer_times_2026.json');
+      final Map<String, dynamic> all = json.decode(raw);
+      final today = _todayKey();
+      if (all.containsKey(today)) {
+        final data = all[today] as Map<String, dynamic>;
+        _setPrayerTimes(data.map((k, v) => MapEntry(k, v.toString())));
+      }
+    } catch (e) {
+      debugPrint('Prayer times load error: $e');
+    }
+  }
+
+  void _setPrayerTimes(Map<String, String> times) {
+    if (!mounted) return;
+    setState(() {
+      _todayPrayers = times;
+      _loading = false;
+    });
+    _findNextPrayer(times);
+    _updateWidget(times);
+  }
+
+  void _findNextPrayer(Map<String, String> times) {
+    final now = TimeOfDay.now();
+    const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    const names = {
+      'fajr': 'الفجر',
+      'dhuhr': 'الظهر',
+      'asr': 'العصر',
+      'maghrib': 'المغرب',
+      'isha': 'العشاء',
+    };
+
+    for (final key in order) {
+      final t = times[key];
+      if (t == null) continue;
+      final parts = t.split(':');
+      if (parts.length < 2) continue;
+      final h = int.tryParse(parts[0]) ?? 0;
+      final m = int.tryParse(parts[1]) ?? 0;
+      if (h > now.hour || (h == now.hour && m > now.minute)) {
+        if (!mounted) return;
+        setState(() {
+          _nextPrayer = names[key] ?? key;
+          _nextPrayerTime = t;
+        });
+        return;
+      }
+    }
+    // After isha — next is fajr
+    if (!mounted) return;
+    setState(() {
+      _nextPrayer = 'الفجر';
+      _nextPrayerTime = times['fajr'] ?? '';
+    });
+  }
+
+  Future<void> _updateWidget(Map<String, String> times) async {
+    try {
+      await HomeWidget.saveWidgetData<String>('fajr', times['fajr'] ?? '');
+      await HomeWidget.saveWidgetData<String>('dhuhr', times['dhuhr'] ?? '');
+      await HomeWidget.saveWidgetData<String>('asr', times['asr'] ?? '');
+      await HomeWidget.saveWidgetData<String>(
+          'maghrib', times['maghrib'] ?? '');
+      await HomeWidget.saveWidgetData<String>('isha', times['isha'] ?? '');
+      await HomeWidget.saveWidgetData<String>(
+          'next_prayer', _nextPrayer);
+      await HomeWidget.saveWidgetData<String>(
+          'next_prayer_time', _nextPrayerTime);
+      await HomeWidget.updateWidget(
+        androidName: 'MasjidWidgetProvider',
+      );
+    } catch (e) {
+      debugPrint('Widget update error: $e');
+    }
+  }
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.watch<ThemeProvider>();
+    final cs = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'مسجد وحسينية أهل البيت',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            onPressed: theme.toggle,
+            icon: Icon(theme.isDark ? Icons.light_mode : Icons.dark_mode),
+            tooltip: theme.isDark ? 'وضع النهار' : 'الوضع الليلي',
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadPrayerTimes,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Logo
+            Center(
+              child: Image.asset(
+                'assets/images/logo.png',
+                height: 120,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.mosque,
+                  size: 100,
+                  color: cs.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Masjid name
+            Center(
+              child: Text(
+                'مسجد وحسينية أهل البيت عليهم السلام',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: cs.primary,
+                ),
+              ),
+            ),
+            Center(
+              child: Text(
+                'بغداد - المنصور',
+                style: TextStyle(fontSize: 16, color: cs.secondary),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Next prayer card
+            if (_nextPrayer.isNotEmpty)
+              Card(
+                color: cs.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'الصلاة القادمة',
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _nextPrayer,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        _nextPrayerTime,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            // Today's prayer times
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'أوقات الصلاة اليوم',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: cs.primary,
+                        ),
+                      ),
+                      const Divider(),
+                      ..._buildPrayerRows(),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildPrayerRows() {
+    const prayers = [
+      ('fajr', 'الفجر', Icons.brightness_3),
+      ('dhuhr', 'الظهر', Icons.wb_sunny),
+      ('asr', 'العصر', Icons.brightness_5),
+      ('maghrib', 'المغرب', Icons.brightness_4),
+      ('isha', 'العشاء', Icons.nights_stay),
+    ];
+
+    return prayers.map((p) {
+      final time = _todayPrayers[p.$1] ?? '--:--';
+      final isNext = p.$2 == _nextPrayer;
+      return ListTile(
+        dense: true,
+        leading: Icon(
+          p.$3,
+          color: isNext
+              ? Theme.of(context).colorScheme.primary
+              : Colors.grey,
+        ),
+        title: Text(
+          p.$2,
+          style: TextStyle(
+            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
+            color: isNext ? Theme.of(context).colorScheme.primary : null,
+          ),
+        ),
+        trailing: Text(
+          time,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
+            color: isNext ? Theme.of(context).colorScheme.primary : null,
+            letterSpacing: 1.5,
+          ),
+        ),
+      );
+    }).toList();
+  }
+}
+
+// ─── More Page ────────────────────────────────────────────────────────────────
+
+class MorePage extends StatelessWidget {
+  const MorePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final theme = context.watch<ThemeProvider>();
+
+    final items = [
+      _MoreItem(
+        icon: Icons.calendar_month,
+        label: 'التقويم الهجري',
+        color: const Color(0xFF4CAF50),
+        page: const HijriCalendarPage(),
+      ),
+      _MoreItem(
+        icon: Icons.auto_stories,
+        label: 'المفاتيح',
+        color: const Color(0xFF2196F3),
+        page: const MafatihPage(),
+      ),
+      _MoreItem(
+        icon: Icons.explore,
+        label: 'اتجاه القبلة',
+        color: const Color(0xFF9C27B0),
+        page: const QiblaPage(),
+      ),
+      _MoreItem(
+        icon: Icons.campaign,
+        label: 'الإعلانات',
+        color: const Color(0xFFF44336),
+        page: const AnnouncementsPage(),
+      ),
+      _MoreItem(
+        icon: Icons.volunteer_activism,
+        label: 'الزيارات',
+        color: const Color(0xFF795548),
+        page: const ZiyaratPage(),
+      ),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('المزيد'),
+        actions: [
+          IconButton(
+            onPressed: theme.toggle,
+            icon: Icon(theme.isDark ? Icons.light_mode : Icons.dark_mode),
+          ),
+        ],
+      ),
+      body: GridView.count(
+        crossAxisCount: 2,
+        padding: const EdgeInsets.all(16),
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        children: items
+            .map(
+              (item) => _MoreCard(item: item),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _MoreItem {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Widget page;
+  const _MoreItem(
+      {required this.icon,
+      required this.label,
+      required this.color,
+      required this.page});
+}
+
+class _MoreCard extends StatelessWidget {
+  final _MoreItem item;
+  const _MoreCard({super.key, required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => Directionality(
+              textDirection: TextDirection.rtl,
+              child: item.page,
+            ),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: item.color.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(item.icon, size: 36, color: item.color),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              item.label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: item.color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
