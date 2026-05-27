@@ -2,6 +2,90 @@ import 'package:flutter/material.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:intl/intl.dart';
 
+// ─── Islamic Occasions Data ───────────────────────────────────────────────────
+
+class _Occasion {
+  final int month;
+  final int day;
+  final String name;
+  final Color color;
+
+  const _Occasion({
+    required this.month,
+    required this.day,
+    required this.name,
+    required this.color,
+  });
+}
+
+const List<_Occasion> _islamicOccasions = [
+  // محرم
+  _Occasion(month: 1, day: 1,  name: 'رأس السنة الهجرية',               color: Color(0xFF1B3D6F)),
+  _Occasion(month: 1, day: 7,  name: 'مولد الإمام علي بن الحسين ع',     color: Color(0xFF2E7D32)),
+  _Occasion(month: 1, day: 10, name: 'يوم عاشوراء - شهادة الإمام الحسين ع', color: Color(0xFFC62828)),
+  _Occasion(month: 1, day: 25, name: 'شهادة الإمام علي بن الحسين ع',    color: Color(0xFFC62828)),
+  // صفر
+  _Occasion(month: 2, day: 7,  name: 'مولد الإمام محمد الباقر ع',       color: Color(0xFF2E7D32)),
+  _Occasion(month: 2, day: 20, name: 'الأربعين - زيارة الأربعين',        color: Color(0xFF1B3D6F)),
+  _Occasion(month: 2, day: 28, name: 'وفاة النبي ﷺ وشهادة الإمام الحسن ع', color: Color(0xFFC62828)),
+  _Occasion(month: 2, day: 30, name: 'شهادة الإمام علي الهادي ع',       color: Color(0xFFC62828)),
+  // ربيع الأول
+  _Occasion(month: 3, day: 8,  name: 'شهادة السيدة فاطمة الزهراء ع',    color: Color(0xFFC62828)),
+  _Occasion(month: 3, day: 17, name: 'مولد النبي محمد ﷺ ومولد الإمام الصادق ع', color: Color(0xFF2E7D32)),
+  // ربيع الثاني
+  _Occasion(month: 4, day: 10, name: 'شهادة السيدة فاطمة الزهراء ع (رواية)', color: Color(0xFFC62828)),
+  // جمادى الأولى
+  _Occasion(month: 5, day: 13, name: 'مولد السيدة فاطمة الزهراء ع',     color: Color(0xFF2E7D32)),
+  _Occasion(month: 5, day: 15, name: 'مولد الإمام الحسن المجتبى ع',     color: Color(0xFF2E7D32)),
+  // جمادى الثانية
+  _Occasion(month: 6, day: 3,  name: 'شهادة السيدة فاطمة الزهراء ع (رواية ثالثة)', color: Color(0xFFC62828)),
+  _Occasion(month: 6, day: 20, name: 'شهادة السيدة فاطمة الزهراء ع (رواية رابعة)', color: Color(0xFFC62828)),
+  // رجب
+  _Occasion(month: 7, day: 1,  name: 'أول رجب المرجب',                  color: Color(0xFF1B3D6F)),
+  _Occasion(month: 7, day: 10, name: 'مولد الإمام محمد الجواد ع',        color: Color(0xFF2E7D32)),
+  _Occasion(month: 7, day: 13, name: 'مولد الإمام علي بن أبي طالب ع',   color: Color(0xFF2E7D32)),
+  _Occasion(month: 7, day: 24, name: 'دحو الأرض',                        color: Color(0xFF1B3D6F)),
+  _Occasion(month: 7, day: 25, name: 'شهادة الإمام موسى الكاظم ع',      color: Color(0xFFC62828)),
+  _Occasion(month: 7, day: 27, name: 'المبعث النبوي الشريف',             color: Color(0xFFC9A843)),
+  // شعبان
+  _Occasion(month: 8, day: 3,  name: 'شهادة الإمام الحسن المجتبى ع',    color: Color(0xFFC62828)),
+  _Occasion(month: 8, day: 5,  name: 'مولد الإمام الحسين ع',             color: Color(0xFF2E7D32)),
+  _Occasion(month: 8, day: 7,  name: 'مولد أبي الفضل العباس ع',          color: Color(0xFF2E7D32)),
+  _Occasion(month: 8, day: 11, name: 'مولد الإمام علي الهادي ع',         color: Color(0xFF2E7D32)),
+  _Occasion(month: 8, day: 15, name: 'مولد الإمام المهدي (عج)',           color: Color(0xFFC9A843)),
+  // رمضان
+  _Occasion(month: 9, day: 1,  name: 'بداية شهر رمضان المبارك',          color: Color(0xFFC9A843)),
+  _Occasion(month: 9, day: 10, name: 'وفاة السيدة خديجة الكبرى ع',       color: Color(0xFFC62828)),
+  _Occasion(month: 9, day: 15, name: 'مولد الإمام الحسن المجتبى ع',      color: Color(0xFF2E7D32)),
+  _Occasion(month: 9, day: 17, name: 'ذكرى غزوة بدر الكبرى',             color: Color(0xFF1B3D6F)),
+  _Occasion(month: 9, day: 19, name: 'ليلة ضربة الإمام علي ع',           color: Color(0xFFC62828)),
+  _Occasion(month: 9, day: 21, name: 'شهادة الإمام علي بن أبي طالب ع',  color: Color(0xFFC62828)),
+  _Occasion(month: 9, day: 23, name: 'ليلة القدر المرجّحة',               color: Color(0xFFC9A843)),
+  // شوال
+  _Occasion(month: 10, day: 1,  name: 'عيد الفطر المبارك',               color: Color(0xFFC9A843)),
+  _Occasion(month: 10, day: 8,  name: 'شهادة الإمام الحسن العسكري ع',    color: Color(0xFFC62828)),
+  _Occasion(month: 10, day: 25, name: 'شهادة الإمام الصادق ع',           color: Color(0xFFC62828)),
+  // ذو القعدة
+  _Occasion(month: 11, day: 11, name: 'مولد الإمام علي الرضا ع',         color: Color(0xFF2E7D32)),
+  _Occasion(month: 11, day: 29, name: 'شهادة الإمام محمد الجواد ع',      color: Color(0xFFC62828)),
+  // ذو الحجة
+  _Occasion(month: 12, day: 7,  name: 'شهادة الإمام الباقر ع',           color: Color(0xFFC62828)),
+  _Occasion(month: 12, day: 10, name: 'عيد الأضحى المبارك',              color: Color(0xFFC9A843)),
+  _Occasion(month: 12, day: 15, name: 'مولد الإمام علي الهادي ع (رواية)', color: Color(0xFF2E7D32)),
+  _Occasion(month: 12, day: 18, name: 'عيد الغدير الأغر',                color: Color(0xFFC9A843)),
+  _Occasion(month: 12, day: 24, name: 'يوم المباهلة',                    color: Color(0xFF1B3D6F)),
+];
+
+const _hijriMonthNames = [
+  'محرم', 'صفر', 'ربيع الأول', 'ربيع الثاني',
+  'جمادى الأولى', 'جمادى الثانية', 'رجب', 'شعبان',
+  'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة',
+];
+
+const _weekDays = ['أح', 'اث', 'ثل', 'أر', 'خم', 'جم', 'سب'];
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 class HijriCalendarPage extends StatefulWidget {
   const HijriCalendarPage({super.key});
 
@@ -10,323 +94,467 @@ class HijriCalendarPage extends StatefulWidget {
 }
 
 class _HijriCalendarPageState extends State<HijriCalendarPage> {
-  late HijriCalendar _hijri;
-  late DateTime _gregorian;
+  late HijriCalendar _today;
+  late int _viewYear;
+  late int _viewMonth;
+  int? _selectedDay;
 
   @override
   void initState() {
     super.initState();
-    _gregorian = DateTime.now();
-    _hijri = HijriCalendar.now();
+    _today = HijriCalendar.now();
+    _viewYear = _today.hYear;
+    _viewMonth = _today.hMonth;
   }
 
-  static const _hijriMonths = [
-    'محرم', 'صفر', 'ربيع الأول', 'ربيع الثاني',
-    'جمادى الأولى', 'جمادى الثانية', 'رجب', 'شعبان',
-    'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة',
-  ];
+  bool get _isCurrentMonth =>
+      _viewYear == _today.hYear && _viewMonth == _today.hMonth;
 
-  // Notable Islamic occasions: month => [(day, name, isShia)]
-  static const Map<int, List<(int, String)>> _occasions = {
-    1: [
-      (1, 'رأس السنة الهجرية'),
-      (10, 'يوم عاشوراء'),
-      (25, 'شهادة الإمام علي بن الحسين (السجاد) ع'),
-    ],
-    2: [
-      (7, 'مولد الإمام محمد الباقر ع'),
-      (20, 'الأربعين - زيارة الأربعين'),
-      (28, 'وفاة النبي محمد ﷺ وشهادة الإمام الحسن ع'),
-      (30, 'شهادة الإمام علي الهادي ع'),
-    ],
-    3: [
-      (8, 'شهادة السيدة فاطمة الزهراء ع'),
-      (17, 'مولد النبي محمد ﷺ - مولد الإمام الصادق ع'),
-    ],
-    4: [
-      (10, 'شهادة السيدة فاطمة الزهراء ع (رواية ثانية)'),
-    ],
-    5: [
-      (13, 'مولد الإمام علي بن أبي طالب ع'),
-      (15, 'مولد الإمام الحسن المجتبى ع'),
-    ],
-    6: [
-      (3, 'شهادة الإمام علي النقي (الهادي) ع'),
-    ],
-    7: [
-      (13, 'مولد الإمام علي بن أبي طالب ع (رواية)'),
-      (27, 'المبعث النبوي الشريف'),
-    ],
-    8: [
-      (3, 'شهادة الإمام الحسن المجتبى ع'),
-      (15, 'مولد الإمام المهدي (عج)'),
-    ],
-    9: [
-      (1, 'بداية شهر رمضان المبارك'),
-      (19, 'ليلة ضربة الإمام علي ع'),
-      (21, 'شهادة الإمام علي بن أبي طالب ع'),
-      (23, 'ليلة القدر'),
-    ],
-    10: [
-      (1, 'عيد الفطر المبارك'),
-      (25, 'شهادة الإمام الصادق ع'),
-    ],
-    11: [],
-    12: [
-      (10, 'عيد الأضحى المبارك'),
-      (18, 'عيد الغدير الأغر'),
-    ],
-  };
-
-  List<(int, String)> get _currentMonthOccasions =>
-      _occasions[_hijri.hMonth] ?? [];
-
-  List<(int, String)> get _upcomingOccasions {
-    final result = <(int, String)>[];
-    for (int m = _hijri.hMonth; m <= 12; m++) {
-      for (final occ in (_occasions[m] ?? [])) {
-        if (m > _hijri.hMonth || occ.$1 >= _hijri.hDay) {
-          result.add(occ);
-        }
+  void _prevMonth() {
+    setState(() {
+      _selectedDay = null;
+      if (_viewMonth == 1) {
+        _viewMonth = 12;
+        _viewYear--;
+      } else {
+        _viewMonth--;
       }
-      if (result.length >= 5) break;
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _selectedDay = null;
+      if (_viewMonth == 12) {
+        _viewMonth = 1;
+        _viewYear++;
+      } else {
+        _viewMonth++;
+      }
+    });
+  }
+
+  void _goToToday() {
+    setState(() {
+      _viewYear = _today.hYear;
+      _viewMonth = _today.hMonth;
+      _selectedDay = _today.hDay;
+    });
+  }
+
+  int _daysInMonth(int year, int month) {
+    final cal = HijriCalendar()
+      ..hYear = year
+      ..hMonth = month
+      ..hDay = 1;
+    return cal.getDaysInMonth(year, month);
+  }
+
+  int _firstWeekday(int year, int month) {
+    final greg = HijriCalendar().hijriToGregorian(year, month, 1);
+    return greg.weekday % 7; // Sunday = 0
+  }
+
+  List<_Occasion> _occasionsForDay(int day) {
+    return _islamicOccasions
+        .where((o) => o.month == _viewMonth && o.day == day)
+        .toList();
+  }
+
+  List<_Occasion> get _monthOccasions => _islamicOccasions
+      .where((o) => o.month == _viewMonth)
+      .toList()
+    ..sort((a, b) => a.day.compareTo(b.day));
+
+  String _gregDateForDay(int day) {
+    try {
+      final greg = HijriCalendar().hijriToGregorian(_viewYear, _viewMonth, day);
+      return DateFormat('d/M/yyyy').format(greg);
+    } catch (_) {
+      return '';
     }
-    return result.take(5).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    const navy = Color(0xFF1B3D6F);
+    const gold = Color(0xFFC9A843);
+
+    final daysInMonth = _daysInMonth(_viewYear, _viewMonth);
+    final firstWeekday = _firstWeekday(_viewYear, _viewMonth);
+    final selectedOccasions =
+        _selectedDay != null ? _occasionsForDay(_selectedDay!) : <_Occasion>[];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('التقويم الهجري')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        title: const Text('التقويم الهجري'),
+        actions: [
+          TextButton(
+            onPressed: _goToToday,
+            child: const Text('اليوم',
+                style: TextStyle(color: Colors.white, fontSize: 15)),
+          ),
+        ],
+      ),
+      body: Column(
         children: [
-          // Current Hijri Date Card
-          Card(
-            color: cs.primary,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const Text(
-                    'التاريخ الهجري اليوم',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '${_hijri.hDay} ${_hijriMonths[_hijri.hMonth - 1]} ${_hijri.hYear}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    DateFormat('EEEE، d MMMM yyyy', 'ar').format(_gregorian),
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 14),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Current month mini-calendar
-          Card(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'شهر ${_hijriMonths[_hijri.hMonth - 1]} ${_hijri.hYear}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: cs.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildMonthGrid(cs),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Upcoming occasions
-          Card(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'المناسبات القادمة',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: cs.primary,
-                    ),
-                  ),
-                  const Divider(),
-                  ..._buildUpcomingOccasions(cs),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // All occasions this month
-          if (_currentMonthOccasions.isNotEmpty)
-            Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Today's date strip ──────────────────────────────────────
+          Container(
+            width: double.infinity,
+            color: navy.withOpacity(0.06),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
                   children: [
+                    const Icon(Icons.today, size: 16, color: navy),
+                    const SizedBox(width: 6),
                     Text(
-                      'مناسبات ${_hijriMonths[_hijri.hMonth - 1]}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: cs.primary,
-                      ),
+                      'اليوم: ${_today.hDay} ${_hijriMonthNames[_today.hMonth - 1]} ${_today.hYear}هـ',
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: navy),
                     ),
-                    const Divider(),
-                    ..._currentMonthOccasions.map((occ) => ListTile(
-                          dense: true,
-                          leading: CircleAvatar(
-                            radius: 16,
-                            backgroundColor: cs.primary.withOpacity(0.1),
-                            child: Text(
-                              '${occ.$1}',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: cs.primary,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          title: Text(occ.$2,
-                              style: const TextStyle(fontSize: 14)),
-                          subtitle: Text(
-                            '${occ.$1} ${_hijriMonths[_hijri.hMonth - 1]}',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        )),
                   ],
                 ),
-              ),
+                Text(
+                  DateFormat('d/M/yyyy').format(DateTime.now()),
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurface.withOpacity(0.5)),
+                ),
+              ],
             ),
+          ),
+
+          // ── Month navigator ─────────────────────────────────────────
+          Container(
+            color: navy,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: _nextMonth, // RTL: right arrow = next
+                  icon: const Icon(Icons.chevron_right,
+                      color: Colors.white, size: 28),
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        _hijriMonthNames[_viewMonth - 1],
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'ScheherazadeNew',
+                        ),
+                      ),
+                      Text(
+                        '$_viewYear هـ',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.75),
+                            fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _prevMonth,
+                  icon: const Icon(Icons.chevron_left,
+                      color: Colors.white, size: 28),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Weekday headers ─────────────────────────────────────────
+          Container(
+            color: navy.withOpacity(0.85),
+            padding:
+                const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: _weekDays
+                  .map((d) => Expanded(
+                        child: Text(
+                          d,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ),
+
+          // ── Day grid ────────────────────────────────────────────────
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              childAspectRatio: 0.9,
+            ),
+            itemCount: firstWeekday + daysInMonth,
+            itemBuilder: (_, i) {
+              if (i < firstWeekday) return const SizedBox.shrink();
+              final day = i - firstWeekday + 1;
+              final isToday = _isCurrentMonth && day == _today.hDay;
+              final isSelected = day == _selectedDay;
+              final occasions = _occasionsForDay(day);
+              final hasOccasion = occasions.isNotEmpty;
+              final occasionColor =
+                  hasOccasion ? occasions.first.color : null;
+
+              return GestureDetector(
+                onTap: () => setState(() =>
+                    _selectedDay = isSelected ? null : day),
+                child: Container(
+                  margin: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? navy
+                        : isToday
+                            ? gold.withOpacity(0.2)
+                            : null,
+                    borderRadius: BorderRadius.circular(8),
+                    border: isToday && !isSelected
+                        ? Border.all(color: gold, width: 1.5)
+                        : isSelected
+                            ? null
+                            : null,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '$day',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isToday || isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: isSelected
+                              ? Colors.white
+                              : isToday
+                                  ? gold
+                                  : cs.onSurface,
+                        ),
+                      ),
+                      if (hasOccasion)
+                        Container(
+                          width: 5,
+                          height: 5,
+                          margin: const EdgeInsets.only(top: 2),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Colors.white70
+                                : occasionColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+
+          const Divider(height: 1),
+
+          // ── Selected day info or month occasions ─────────────────────
+          Expanded(
+            child: _selectedDay != null && selectedOccasions.isNotEmpty
+                ? _SelectedDayPanel(
+                    day: _selectedDay!,
+                    month: _viewMonth,
+                    year: _viewYear,
+                    gregDate: _gregDateForDay(_selectedDay!),
+                    occasions: selectedOccasions,
+                  )
+                : _MonthOccasionsList(
+                    occasions: _monthOccasions,
+                    monthName: _hijriMonthNames[_viewMonth - 1],
+                    year: _viewYear,
+                  ),
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildMonthGrid(ColorScheme cs) {
-    // Days of week header (Arabic, Sun-Sat)
-    const dayLabels = ['أح', 'اث', 'ثل', 'أر', 'خم', 'جم', 'سب'];
-    final daysInMonth = _hijri.getDaysInMonth(_hijri.hYear, _hijri.hMonth);
+// ─── Selected Day Panel ───────────────────────────────────────────────────────
 
-    // Find the weekday of day 1 of this Hijri month
-    final firstGregorian = HijriCalendar()
-      ..hYear = _hijri.hYear
-      ..hMonth = _hijri.hMonth
-      ..hDay = 1;
-    final firstDate = firstGregorian.hijriToGregorian(
-        _hijri.hYear, _hijri.hMonth, 1);
-    final startWeekday = firstDate.weekday % 7; // Sunday=0
+class _SelectedDayPanel extends StatelessWidget {
+  final int day;
+  final int month;
+  final int year;
+  final String gregDate;
+  final List<_Occasion> occasions;
 
-    return Column(
+  const _SelectedDayPanel({
+    required this.day,
+    required this.month,
+    required this.year,
+    required this.gregDate,
+    required this.occasions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: dayLabels
-              .map((d) => SizedBox(
-                    width: 32,
-                    child: Text(d,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: cs.primary,
-                            fontWeight: FontWeight.bold)),
-                  ))
-              .toList(),
+          children: [
+            const Icon(Icons.event, color: Color(0xFF1B3D6F), size: 20),
+            const SizedBox(width: 8),
+            Text(
+              '$day ${_hijriMonthNames[month - 1]} $year هـ  •  $gregDate',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Color(0xFF1B3D6F),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 7,
-            childAspectRatio: 1,
-          ),
-          itemCount: startWeekday + daysInMonth,
-          itemBuilder: (_, i) {
-            if (i < startWeekday) return const SizedBox.shrink();
-            final day = i - startWeekday + 1;
-            final isToday = day == _hijri.hDay;
-            final hasOccasion = (_currentMonthOccasions
-                .any((occ) => occ.$1 == day));
-
-            return Container(
-              margin: const EdgeInsets.all(2),
+        const SizedBox(height: 12),
+        ...occasions.map((o) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: isToday ? cs.primary : null,
-                shape: BoxShape.circle,
-                border: hasOccasion && !isToday
-                    ? Border.all(color: cs.primary, width: 1.5)
-                    : null,
+                color: o.color.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: o.color.withOpacity(0.3)),
               ),
-              child: Center(
-                child: Text(
-                  '$day',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isToday ? Colors.white : null,
-                    fontWeight:
-                        isToday || hasOccasion ? FontWeight.bold : null,
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: o.color,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      o.name,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: o.color,
+                        fontFamily: 'ScheherazadeNew',
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            );
-          },
-        ),
+            )),
       ],
     );
   }
+}
 
-  List<Widget> _buildUpcomingOccasions(ColorScheme cs) {
-    final upcoming = _upcomingOccasions;
-    if (upcoming.isEmpty) {
-      return [const Text('لا توجد مناسبات قادمة هذا الشهر')];
+// ─── Month Occasions List ─────────────────────────────────────────────────────
+
+class _MonthOccasionsList extends StatelessWidget {
+  final List<_Occasion> occasions;
+  final String monthName;
+  final int year;
+
+  const _MonthOccasionsList({
+    required this.occasions,
+    required this.monthName,
+    required this.year,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (occasions.isEmpty) {
+      return const Center(
+        child: Text(
+          'لا توجد مناسبات هذا الشهر',
+          style: TextStyle(fontSize: 15),
+        ),
+      );
     }
-    return upcoming
-        .map((occ) => ListTile(
-              dense: true,
-              leading: Icon(Icons.event, color: cs.primary, size: 20),
-              title: Text(occ.$2, style: const TextStyle(fontSize: 14)),
-              subtitle: Text(
-                '${occ.$1} ${_hijriMonths[_hijri.hMonth - 1]} ${_hijri.hYear}',
-                style: const TextStyle(fontSize: 12),
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: occasions.length + 1,
+      itemBuilder: (ctx, i) {
+        if (i == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8, right: 4),
+            child: Text(
+              'مناسبات شهر $monthName $year هـ',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: Color(0xFF1B3D6F),
               ),
-            ))
-        .toList();
+            ),
+          );
+        }
+        final o = occasions[i - 1];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: o.color.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(10),
+            border: Border(
+              right: BorderSide(color: o.color, width: 3),
+            ),
+          ),
+          child: ListTile(
+            dense: true,
+            leading: CircleAvatar(
+              radius: 16,
+              backgroundColor: o.color.withOpacity(0.15),
+              child: Text(
+                '${o.day}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: o.color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            title: Text(
+              o.name,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: o.color,
+                fontFamily: 'ScheherazadeNew',
+              ),
+            ),
+            subtitle: Text(
+              '${o.day} $monthName',
+              style: TextStyle(
+                  fontSize: 11,
+                  color: o.color.withOpacity(0.7)),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
