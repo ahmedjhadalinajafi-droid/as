@@ -24,7 +24,7 @@ dependencies:
   timezone: ^0.9.2
 
   # Location & Compass
-  geolocator: ^11.0.0
+  geolocator: ^14.0.2
   flutter_compass: ^0.8.0
   permission_handler: ^11.3.0
 
@@ -43,7 +43,7 @@ dependencies:
   provider: ^6.1.1
 
   # Home Widget
-  home_widget: ^0.4.1
+  home_widget: ^0.9.2
 
   cupertino_icons: ^1.0.2
 
