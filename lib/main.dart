@@ -89,40 +89,72 @@ class MasjidApp extends StatelessWidget {
   }
 
   ThemeData _buildTheme(Brightness brightness) {
-    const green = Color(0xFF1B5E20);
+    // Logo colors: navy blue + gold accent
+    const navy = Color(0xFF1B3D6F);
+    const gold = Color(0xFFC9A843);
+    final isDark = brightness == Brightness.dark;
+
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: green,
+        seedColor: navy,
         brightness: brightness,
+        primary: navy,
+        secondary: gold,
+        tertiary: gold,
       ),
       fontFamily: 'ScheherazadeNew',
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         centerTitle: true,
-        backgroundColor: green,
+        backgroundColor: navy,
         foregroundColor: Colors.white,
+        elevation: 3,
+        shadowColor: navy.withOpacity(0.4),
+        titleTextStyle: const TextStyle(
+          fontFamily: 'ScheherazadeNew',
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
+      cardTheme: CardThemeData(
         elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: navy,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: gold,
+        foregroundColor: Colors.white,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        indicatorColor: green.withOpacity(0.2),
+        backgroundColor: isDark ? const Color(0xFF0D1B2E) : Colors.white,
+        indicatorColor: navy.withOpacity(0.15),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
-            color: states.contains(WidgetState.selected)
-                ? green
-                : Colors.grey,
+            color: states.contains(WidgetState.selected) ? navy : Colors.grey,
           ),
         ),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
-            color: states.contains(WidgetState.selected)
-                ? green
-                : Colors.grey,
+            color: states.contains(WidgetState.selected) ? navy : Colors.grey,
             fontFamily: 'ScheherazadeNew',
             fontSize: 13,
           ),
         ),
       ),
+      scaffoldBackgroundColor:
+          isDark ? const Color(0xFF0A1628) : const Color(0xFFF4F6FA),
+      dividerColor: navy.withOpacity(0.12),
     );
   }
 }
@@ -357,7 +389,21 @@ class _HomePageState extends State<HomePage> {
             Center(
               child: Text(
                 'بغداد - المنصور',
-                style: TextStyle(fontSize: 16, color: cs.secondary),
+                style: TextStyle(fontSize: 15, color: cs.secondary),
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Gold divider — matches logo
+            Center(
+              child: Container(
+                width: 120,
+                height: 3,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Colors.transparent, Color(0xFFC9A843), Colors.transparent],
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -365,7 +411,7 @@ class _HomePageState extends State<HomePage> {
             // Next prayer card
             if (_nextPrayer.isNotEmpty)
               Card(
-                color: cs.primary,
+                color: const Color(0xFF1B3D6F),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16)),
                 child: Padding(
