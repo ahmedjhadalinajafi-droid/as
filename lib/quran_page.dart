@@ -461,7 +461,6 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
               textDirection: TextDirection.ltr,
               child: PageView.builder(
                 controller: _pageController,
-                reverse: true,
                 itemCount: widget.surahs.length,
                 onPageChanged: (i) {
                   _stopAudio();
