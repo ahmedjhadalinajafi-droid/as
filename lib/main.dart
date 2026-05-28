@@ -198,28 +198,37 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF0A1628) : const Color(0xFFF8F4EC);
-    // Gold — same as logo
     const gold = Color(0xFFC9A843);
-    final patternColor = gold.withOpacity(isDark ? 0.18 : 0.22);
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Container(
-        color: bgColor,
+        // Warm cream base in light mode, dark navy in dark mode
+        color: isDark ? const Color(0xFF0A1628) : const Color(0xFFF8F6EE),
         child: Stack(
           children: [
-            // Try the user's pattern image first; CustomPainter is the fallback
             Positioned.fill(
-              child: Image.asset(
-                'assets/images/bg_pattern.png',
-                repeat: ImageRepeat.repeat,
-                color: patternColor,
-                colorBlendMode: BlendMode.srcIn,
-                errorBuilder: (_, __, ___) => CustomPaint(
-                  painter: _IslamicPatternPainter(patternColor),
-                ),
-              ),
+              child: isDark
+                  // Dark mode: draw gold stars in code (JPEG would cover dark bg)
+                  ? CustomPaint(
+                      painter: _IslamicPatternPainter(
+                          gold.withOpacity(0.18)),
+                    )
+                  // Light mode: use the user's image tinted gold via multiply
+                  // multiply(white→gold, grey_lines→darker_gold) = beautiful parchment
+                  : ColorFiltered(
+                      colorFilter: const ColorFilter.mode(
+                          gold, BlendMode.multiply),
+                      child: Image.asset(
+                        'assets/images/bg_pattern.png',
+                        repeat: ImageRepeat.repeat,
+                        fit: BoxFit.none,
+                        errorBuilder: (_, __, ___) => CustomPaint(
+                          painter: _IslamicPatternPainter(
+                              gold.withOpacity(0.22)),
+                        ),
+                      ),
+                    ),
             ),
             Scaffold(
               extendBody: true,
