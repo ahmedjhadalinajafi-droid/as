@@ -481,15 +481,19 @@ class _SurahContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: surah.verses.length + 1,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (ctx, i) {
-        if (i == 0) {
-          // Bismillah header (except Al-Fatiha and At-Tawba)
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+    // Build one flowing Mushaf-style text block with inline verse markers
+    final flowingText = surah.verses
+        .map((v) => '${v.text} ﴿${v.id}﴾')
+        .join(' ');
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Bismillah / surah name header
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
             child: Column(
               children: [
                 Container(
@@ -498,13 +502,13 @@ class _SurahContent extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: cs.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(50),
-                    border: Border.all(
-                        color: cs.primary.withOpacity(0.3)),
+                    border: Border.all(color: cs.primary.withOpacity(0.3)),
                   ),
                   child: Text(
                     surah.id != 9
                         ? 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'
                         : surah.name,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'ScheherazadeNew',
                       fontSize: 22,
@@ -512,7 +516,7 @@ class _SurahContent extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
                   '${surah.nameEn}  —  ${surah.versesCount} آية',
                   style: TextStyle(
@@ -522,27 +526,35 @@ class _SurahContent extends StatelessWidget {
                 ),
               ],
             ),
-          );
-        }
-
-        final verse = surah.verses[i - 1];
-        // Verse number glyph appended inline (Mushaf style)
-        final verseEnd = ' ﴿${verse.id}﴾';
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Text(
-            verse.text + verseEnd,
-            textDirection: TextDirection.rtl,
-            textAlign: TextAlign.justify,
-            style: TextStyle(
-              fontFamily: 'ScheherazadeNew',
-              fontSize: 24,
-              height: 2.1,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
           ),
-        );
-      },
+
+          // All verses as one flowing justified block
+          if (surah.verses.isNotEmpty)
+            SelectableText(
+              flowingText,
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.justify,
+              style: TextStyle(
+                fontFamily: 'ScheherazadeNew',
+                fontSize: 24,
+                height: 2.2,
+                color: cs.onSurface,
+              ),
+            )
+          else
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text(
+                  'النص غير متوفر',
+                  style: TextStyle(color: cs.onSurface.withOpacity(0.4)),
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 60),
+        ],
+      ),
     );
   }
 }

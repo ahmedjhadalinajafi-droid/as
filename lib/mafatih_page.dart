@@ -271,11 +271,20 @@ class _ChapterReaderPageState extends State<_ChapterReaderPage> {
               onPageChanged: (i) => setState(() => _index = i),
               itemBuilder: (_, i) {
                 final ch = widget.chapters[i];
+                // Build flowing paragraph text — split on blank lines into paragraphs
+                final paragraphs = ch.content
+                    .split(RegExp(r'\n\s*\n'))
+                    .map((p) => p.trim())
+                    .where((p) => p.isNotEmpty)
+                    .toList();
+
                 return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 22, vertical: 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Title
                       Text(
                         ch.title,
                         textAlign: TextAlign.center,
@@ -292,28 +301,27 @@ class _ChapterReaderPageState extends State<_ChapterReaderPage> {
                           ch.subtitle,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: _fontSize - 4,
-                            color: cs.onSurface.withOpacity(0.6),
+                            fontSize: _fontSize - 2,
+                            color: cs.onSurface.withOpacity(0.55),
+                            fontFamily: 'ScheherazadeNew',
                           ),
                         ),
                       ],
-                      const SizedBox(height: 24),
-                      // Split by newline so each line is its own full-width block
-                      ...ch.content.split('\n').map((line) => line.trim().isEmpty
-                          ? const SizedBox(height: 12)
-                          : Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: SelectableText(
-                                line,
-                                textDirection: TextDirection.rtl,
-                                textAlign: TextAlign.justify,
-                                style: TextStyle(
-                                  fontFamily: 'ScheherazadeNew',
-                                  fontSize: _fontSize,
-                                  height: 2.1,
-                                ),
+                      const SizedBox(height: 28),
+                      // Flowing paragraphs — natural word-wrap like a book
+                      ...paragraphs.map((para) => Padding(
+                            padding: const EdgeInsets.only(bottom: 18),
+                            child: SelectableText(
+                              para.replaceAll('\n', ' '),
+                              textDirection: TextDirection.rtl,
+                              textAlign: TextAlign.justify,
+                              style: TextStyle(
+                                fontFamily: 'ScheherazadeNew',
+                                fontSize: _fontSize,
+                                height: 2.1,
                               ),
-                            )),
+                            ),
+                          )),
                       const SizedBox(height: 40),
                     ],
                   ),
