@@ -54,28 +54,29 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar', null);
 
-  // On web use hardcoded options; on iOS/Android read from
-  // GoogleService-Info.plist / google-services.json automatically.
-  if (kIsWeb) {
-    await Firebase.initializeApp(
-      options: const FirebaseOptions(
-        apiKey: 'AIzaSyATN8cckOCKAt-DZtxgHcovH_J7hf2wBK0',
-        authDomain: 'masjid-405c1.firebaseapp.com',
-        projectId: 'masjid-405c1',
-        storageBucket: 'masjid-405c1.firebasestorage.app',
-        messagingSenderId: '658803064168',
-        appId: '1:658803064168:web:410dacdec0e839da54eadd',
-      ),
-    );
-  } else {
-    await Firebase.initializeApp();
-  }
-
-  if (!kIsWeb) {
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  try {
+    if (kIsWeb) {
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: 'AIzaSyATN8cckOCKAt-DZtxgHcovH_J7hf2wBK0',
+          authDomain: 'masjid-405c1.firebaseapp.com',
+          projectId: 'masjid-405c1',
+          storageBucket: 'masjid-405c1.firebasestorage.app',
+          messagingSenderId: '658803064168',
+          appId: '1:658803064168:web:410dacdec0e839da54eadd',
+        ),
+      );
+    } else {
+      await Firebase.initializeApp();
+    }
+  } catch (e) {
+    debugPrint('Firebase init failed: $e');
   }
 
   try {
+    if (!kIsWeb) {
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    }
     await NotificationService().initialize();
   } catch (e) {
     debugPrint('NotificationService init failed: $e');
