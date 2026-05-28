@@ -374,7 +374,8 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 7,
-                childAspectRatio: 1.0,
+                childAspectRatio: 1.1,
+                mainAxisSpacing: 2,
               ),
               itemCount: firstWd + daysInMonth,
               itemBuilder: (_, i) {
@@ -414,11 +415,11 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Hijri date — bigger
+                        // Hijri date
                         Text(
                           '${hDate.hDay}',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 9,
                             height: 1.1,
                             color: isSelected
                                 ? Colors.white60
@@ -432,7 +433,7 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                         Text(
                           '$gregDay',
                           style: TextStyle(
-                            fontSize: 17,
+                            fontSize: 14,
                             height: 1.1,
                             fontWeight: isToday || isSelected
                                 ? FontWeight.bold

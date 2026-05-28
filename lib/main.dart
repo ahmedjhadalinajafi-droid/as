@@ -183,7 +183,7 @@ class MasjidApp extends StatelessWidget {
           ),
         ),
       ),
-      scaffoldBackgroundColor: Colors.transparent,
+      scaffoldBackgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
       dividerColor: navy.withOpacity(0.12),
     );
   }

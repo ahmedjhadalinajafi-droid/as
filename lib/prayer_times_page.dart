@@ -301,61 +301,71 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
 
   Widget _buildMonthlyTable(ColorScheme cs) {
     final now = DateTime.now();
-    final daysInMonth =
-        DateTime(now.year, now.month + 1, 0).day;
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
     final today = now.day;
+    const headers = ['يوم', 'فجر', 'ظهر', 'عصر', 'مغرب', 'عشاء'];
+    const keys = ['', 'fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    const style = TextStyle(fontSize: 11);
+    const hStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.bold);
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: WidgetStateProperty.all(
-            cs.primary.withOpacity(0.1)),
-        columnSpacing: 12,
-        columns: const [
-          DataColumn(label: Text('اليوم', style: TextStyle(fontSize: 12))),
-          DataColumn(label: Text('الفجر', style: TextStyle(fontSize: 12))),
-          DataColumn(label: Text('الظهر', style: TextStyle(fontSize: 12))),
-          DataColumn(label: Text('العصر', style: TextStyle(fontSize: 12))),
-          DataColumn(label: Text('المغرب', style: TextStyle(fontSize: 12))),
-          DataColumn(label: Text('العشاء', style: TextStyle(fontSize: 12))),
-        ],
-        rows: List.generate(daysInMonth, (i) {
+    return Table(
+      defaultColumnWidth: const FlexColumnWidth(),
+      border: TableBorder(
+        horizontalInside: BorderSide(color: cs.outline.withOpacity(0.15)),
+      ),
+      children: [
+        // Header row
+        TableRow(
+          decoration: BoxDecoration(color: cs.primary.withOpacity(0.1)),
+          children: headers
+              .map((h) => Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 8, horizontal: 2),
+                    child: Text(h,
+                        textAlign: TextAlign.center, style: hStyle),
+                  ))
+              .toList(),
+        ),
+        // Data rows
+        ...List.generate(daysInMonth, (i) {
           final day = i + 1;
-          final key =
+          final k =
               '${now.year}-${now.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
-          final times = _allTimes[key];
+          final times = _allTimes[k];
           final Map<String, String> t = times is Map
               ? Map<String, String>.from(
-                  times.map((k, v) => MapEntry(k.toString(), v.toString())))
+                  times.map((a, b) => MapEntry(a.toString(), b.toString())))
               : {};
           final isToday = day == today;
+          final rowColor =
+              isToday ? cs.primary.withOpacity(0.08) : null;
 
-          return DataRow(
-            color: WidgetStateProperty.resolveWith((states) =>
-                isToday ? cs.primary.withOpacity(0.08) : null),
-            cells: [
-              DataCell(Text(
-                '$day',
-                style: TextStyle(
-                  fontWeight:
-                      isToday ? FontWeight.bold : FontWeight.normal,
-                  color: isToday ? cs.primary : null,
-                ),
-              )),
-              DataCell(Text(t['fajr'] ?? '-',
-                  style: const TextStyle(fontSize: 12))),
-              DataCell(Text(t['dhuhr'] ?? '-',
-                  style: const TextStyle(fontSize: 12))),
-              DataCell(Text(t['asr'] ?? '-',
-                  style: const TextStyle(fontSize: 12))),
-              DataCell(Text(t['maghrib'] ?? '-',
-                  style: const TextStyle(fontSize: 12))),
-              DataCell(Text(t['isha'] ?? '-',
-                  style: const TextStyle(fontSize: 12))),
+          return TableRow(
+            decoration:
+                rowColor != null ? BoxDecoration(color: rowColor) : null,
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                child: Text('$day',
+                    textAlign: TextAlign.center,
+                    style: style.copyWith(
+                      fontWeight: isToday
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: isToday ? cs.primary : null,
+                    )),
+              ),
+              ...keys.skip(1).map((key) => Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 6, horizontal: 2),
+                    child: Text(t[key] ?? '-',
+                        textAlign: TextAlign.center, style: style),
+                  )),
             ],
           );
         }),
-      ),
+      ],
     );
   }
 }

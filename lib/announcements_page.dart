@@ -24,23 +24,7 @@ class AnnouncementsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('الإعلانات'),
-        actions: [
-          _AdminLoginButton(),
-        ],
       ),
-      floatingActionButton: _isAdmin
-          ? FloatingActionButton.extended(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const _AddAnnouncementPage()),
-              ),
-              icon: const Icon(Icons.add),
-              label: const Text('إعلان جديد'),
-              backgroundColor: cs.primary,
-              foregroundColor: Colors.white,
-            )
-          : null,
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('announcements')
@@ -74,7 +58,7 @@ class AnnouncementsPage extends StatelessWidget {
             itemBuilder: (ctx, i) {
               final data = docs[i].data() as Map<String, dynamic>;
               return _AnnouncementCard(
-                  data: data, docId: docs[i].id, showDelete: _isAdmin);
+                  data: data, docId: docs[i].id, showDelete: false);
             },
           );
         },
