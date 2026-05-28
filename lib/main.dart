@@ -71,9 +71,15 @@ Future<void> main() async {
     await Firebase.initializeApp();
   }
 
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
 
-  await NotificationService().initialize();
+  try {
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint('NotificationService init failed: $e');
+  }
 
   runApp(
     ChangeNotifierProvider(
