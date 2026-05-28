@@ -638,18 +638,20 @@ class _HomePageState extends State<HomePage> {
   Future<void> _updateWidget(Map<String, String> times) async {
     if (kIsWeb) return;
     try {
-      await HomeWidget.saveWidgetData<String>('fajr', times['fajr'] ?? '');
-      await HomeWidget.saveWidgetData<String>('dhuhr', times['dhuhr'] ?? '');
-      await HomeWidget.saveWidgetData<String>('asr', times['asr'] ?? '');
-      await HomeWidget.saveWidgetData<String>(
-          'maghrib', times['maghrib'] ?? '');
-      await HomeWidget.saveWidgetData<String>('isha', times['isha'] ?? '');
-      await HomeWidget.saveWidgetData<String>(
-          'next_prayer', _nextPrayer);
-      await HomeWidget.saveWidgetData<String>(
-          'next_prayer_time', _nextPrayerTime);
+      // iOS requires App Group so the widget extension can read the data
+      await HomeWidget.setAppGroupId('group.com.ahmed.najafi.masjid');
+
+      await HomeWidget.saveWidgetData<String>('fajr',    times['fajr']    ?? '');
+      await HomeWidget.saveWidgetData<String>('dhuhr',   times['dhuhr']   ?? '');
+      await HomeWidget.saveWidgetData<String>('asr',     times['asr']     ?? '');
+      await HomeWidget.saveWidgetData<String>('maghrib', times['maghrib'] ?? '');
+      await HomeWidget.saveWidgetData<String>('isha',    times['isha']    ?? '');
+      await HomeWidget.saveWidgetData<String>('next_prayer',      _nextPrayer);
+      await HomeWidget.saveWidgetData<String>('next_prayer_time', _nextPrayerTime);
+
       await HomeWidget.updateWidget(
         androidName: 'MasjidWidgetProvider',
+        iOSName: 'MasjidWidget',
       );
     } catch (e) {
       debugPrint('Widget update error: $e');
