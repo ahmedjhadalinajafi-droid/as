@@ -270,10 +270,14 @@ class _HomePageState extends State<HomePage> {
       if (all.containsKey(today)) {
         final data = all[today] as Map<String, dynamic>;
         _setPrayerTimes(data.map((k, v) => MapEntry(k, v.toString())));
+        return;
       }
     } catch (e) {
       debugPrint('Prayer times load error: $e');
     }
+
+    // Nothing loaded — stop spinner
+    if (mounted) setState(() => _loading = false);
   }
 
   void _setPrayerTimes(Map<String, String> times) {

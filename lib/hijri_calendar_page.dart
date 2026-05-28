@@ -198,8 +198,9 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
           // ── Today's date strip ──────────────────────────────────────
           Container(
             width: double.infinity,
@@ -306,7 +307,7 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
             gridDelegate:
                 const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7,
-              childAspectRatio: 0.9,
+              childAspectRatio: 1.3,
             ),
             itemCount: firstWeekday + daysInMonth,
             itemBuilder: (_, i) {
@@ -376,22 +377,21 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
           const Divider(height: 1),
 
           // ── Selected day info or month occasions ─────────────────────
-          Expanded(
-            child: _selectedDay != null && selectedOccasions.isNotEmpty
-                ? _SelectedDayPanel(
-                    day: _selectedDay!,
-                    month: _viewMonth,
-                    year: _viewYear,
-                    gregDate: _gregDateForDay(_selectedDay!),
-                    occasions: selectedOccasions,
-                  )
-                : _MonthOccasionsList(
-                    occasions: _monthOccasions,
-                    monthName: _hijriMonthNames[_viewMonth - 1],
-                    year: _viewYear,
-                  ),
-          ),
+          _selectedDay != null && selectedOccasions.isNotEmpty
+              ? _SelectedDayPanel(
+                  day: _selectedDay!,
+                  month: _viewMonth,
+                  year: _viewYear,
+                  gregDate: _gregDateForDay(_selectedDay!),
+                  occasions: selectedOccasions,
+                )
+              : _MonthOccasionsList(
+                  occasions: _monthOccasions,
+                  monthName: _hijriMonthNames[_viewMonth - 1],
+                  year: _viewYear,
+                ),
         ],
+        ),
       ),
     );
   }
@@ -417,6 +417,8 @@ class _SelectedDayPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: [
         Row(
@@ -488,15 +490,19 @@ class _MonthOccasionsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (occasions.isEmpty) {
-      return const Center(
+      return const Padding(
+        padding: EdgeInsets.all(24),
         child: Text(
           'لا توجد مناسبات هذا الشهر',
+          textAlign: TextAlign.center,
           style: TextStyle(fontSize: 15),
         ),
       );
     }
 
     return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(12),
       itemCount: occasions.length + 1,
       itemBuilder: (ctx, i) {
