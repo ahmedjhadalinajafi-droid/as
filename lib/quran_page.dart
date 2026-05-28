@@ -12,7 +12,6 @@ class Surah {
   final String nameEn;
   final String type;
   final int versesCount;
-  final List<Verse> verses;
 
   const Surah({
     required this.id,
@@ -20,7 +19,6 @@ class Surah {
     required this.nameEn,
     required this.type,
     required this.versesCount,
-    required this.verses,
   });
 
   factory Surah.fromJson(Map<String, dynamic> j) {
@@ -31,9 +29,6 @@ class Surah {
       type: j['type'] as String? ?? '',
       versesCount:
           j['total_verses'] as int? ?? j['verses_count'] as int? ?? 0,
-      verses: (j['verses'] as List<dynamic>? ?? [])
-          .map((v) => Verse.fromJson(v as Map<String, dynamic>))
-          .toList(),
     );
   }
 }
@@ -41,15 +36,42 @@ class Surah {
 class Verse {
   final int id;
   final String text;
-
   const Verse({required this.id, required this.text});
+}
 
-  factory Verse.fromJson(Map<String, dynamic> j) {
-    return Verse(
-      id: j['id'] as int? ?? j['verse_number'] as int? ?? 0,
-      text: j['text'] as String? ?? '',
-    );
+// Global raw data — parsed once, verses extracted on demand
+List<dynamic>? _rawQuranData;
+final Map<int, List<Verse>> _versesCache = {};
+
+Future<void> _ensureLoaded() async {
+  if (_rawQuranData != null) return;
+  final raw = await rootBundle.loadString('assets/quran.json');
+  _rawQuranData = json.decode(raw) as List<dynamic>;
+}
+
+Future<List<Verse>> loadVerses(int surahId) async {
+  if (_versesCache.containsKey(surahId)) return _versesCache[surahId]!;
+  await _ensureLoaded();
+  final surahData = _rawQuranData!.firstWhere(
+    (s) => (s as Map<String, dynamic>)['id'] == surahId,
+    orElse: () => <String, dynamic>{},
+  ) as Map<String, dynamic>;
+  final verses = (surahData['verses'] as List<dynamic>? ?? [])
+      .map((v) {
+        final m = v as Map<String, dynamic>;
+        return Verse(
+          id: m['id'] as int? ?? m['verse_number'] as int? ?? 0,
+          text: m['text'] as String? ?? '',
+        );
+      })
+      .toList();
+  _versesCache[surahId] = verses;
+  // Keep cache small — evict oldest beyond 5 surahs
+  if (_versesCache.length > 5) {
+    final oldest = _versesCache.keys.first;
+    _versesCache.remove(oldest);
   }
+  return verses;
 }
 
 // ─── Surah List Page ─────────────────────────────────────────────────────────
@@ -82,9 +104,8 @@ class _QuranPageState extends State<QuranPage> {
 
   Future<void> _load() async {
     try {
-      final raw = await rootBundle.loadString('assets/quran.json');
-      final List<dynamic> data = json.decode(raw);
-      final surahs = data
+      await _ensureLoaded();
+      final surahs = _rawQuranData!
           .map((e) => Surah.fromJson(e as Map<String, dynamic>))
           .toList();
       if (mounted) {
@@ -146,8 +167,7 @@ class _QuranPageState extends State<QuranPage> {
                           final s = _filtered[i];
                           return ListTile(
                             leading: CircleAvatar(
-                              backgroundColor:
-                                  cs.primary.withOpacity(0.1),
+                              backgroundColor: cs.primary.withOpacity(0.1),
                               child: Text(
                                 '${s.id}',
                                 style: TextStyle(
@@ -173,8 +193,7 @@ class _QuranPageState extends State<QuranPage> {
                                 MaterialPageRoute(
                                   builder: (_) => SurahReaderPage(
                                     surahs: _surahs,
-                                    initialIndex:
-                                        _surahs.indexOf(s),
+                                    initialIndex: _surahs.indexOf(s),
                                   ),
                                 ),
                               );
@@ -208,6 +227,7 @@ class SurahReaderPage extends StatefulWidget {
 class _SurahReaderPageState extends State<SurahReaderPage> {
   late int _currentIndex;
   late PageController _pageController;
+  double _fontSize = 24;
 
   // Audio
   final AudioPlayer _player = AudioPlayer();
@@ -227,9 +247,8 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
   Future<void> _setupAudio() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.speech());
-
-    _player.playerStateStream.listen((state) {
-      if (mounted) setState(() => _playerState = state);
+    _player.playerStateStream.listen((s) {
+      if (mounted) setState(() => _playerState = s);
     });
     _player.positionStream.listen((p) {
       if (mounted) setState(() => _position = p);
@@ -248,7 +267,6 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
 
   Surah get _current => widget.surahs[_currentIndex];
 
-  // EveryAyah CDN for surah — full surah via Quran Audio CDN
   String get _audioUrl {
     final num = _current.id.toString().padLeft(3, '0');
     return 'https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/$num.mp3';
@@ -259,7 +277,6 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
       await _player.pause();
       return;
     }
-
     if (_playerState?.processingState == ProcessingState.idle ||
         _playerState == null) {
       setState(() => _audioLoading = true);
@@ -279,19 +296,14 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
     await _player.play();
   }
 
-  Future<void> _stopAudio() async {
-    await _player.stop();
-  }
+  Future<void> _stopAudio() async => _player.stop();
 
   void _goTo(int index) {
     if (index < 0 || index >= widget.surahs.length) return;
     _stopAudio();
     setState(() => _currentIndex = index);
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    _pageController.animateToPage(index,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
   String _fmt(Duration d) {
@@ -313,15 +325,20 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.format_size),
-            onPressed: () {},
-            tooltip: 'حجم الخط',
+            icon: const Icon(Icons.text_decrease),
+            onPressed: () =>
+                setState(() => _fontSize = (_fontSize - 2).clamp(16, 36)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.text_increase),
+            onPressed: () =>
+                setState(() => _fontSize = (_fontSize + 2).clamp(16, 36)),
           ),
         ],
       ),
       body: Column(
         children: [
-          // Audio Player Bar
+          // Audio bar
           Container(
             color: cs.primary.withOpacity(0.08),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -329,15 +346,12 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
               children: [
                 Row(
                   children: [
-                    // Prev Surah
                     IconButton(
                       onPressed: _currentIndex > 0
                           ? () => _goTo(_currentIndex - 1)
                           : null,
-                      icon: const Icon(Icons.skip_next), // RTL: next = prev
-                      tooltip: 'السورة السابقة',
+                      icon: const Icon(Icons.skip_next),
                     ),
-                    // Play/Pause/Stop
                     _audioLoading
                         ? const SizedBox(
                             width: 40,
@@ -361,19 +375,14 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
                               color: cs.primary,
                             ),
                           ),
-                    // Stop
                     IconButton(
-                      onPressed: _stopAudio,
-                      icon: const Icon(Icons.stop),
-                    ),
-                    // Next Surah
+                        onPressed: _stopAudio,
+                        icon: const Icon(Icons.stop)),
                     IconButton(
-                      onPressed:
-                          _currentIndex < widget.surahs.length - 1
-                              ? () => _goTo(_currentIndex + 1)
-                              : null,
-                      icon: const Icon(Icons.skip_previous), // RTL
-                      tooltip: 'السورة التالية',
+                      onPressed: _currentIndex < widget.surahs.length - 1
+                          ? () => _goTo(_currentIndex + 1)
+                          : null,
+                      icon: const Icon(Icons.skip_previous),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -381,22 +390,19 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'المنشد: مشاري العفاسي',
+                            'مشاري العفاسي',
                             style: TextStyle(
                               fontSize: 11,
                               color: cs.onSurface.withOpacity(0.6),
                             ),
                           ),
-                          Text(
-                            '${_fmt(_position)} / ${_fmt(_duration)}',
-                            style: const TextStyle(fontSize: 12),
-                          ),
+                          Text('${_fmt(_position)} / ${_fmt(_duration)}',
+                              style: const TextStyle(fontSize: 12)),
                         ],
                       ),
                     ),
                   ],
                 ),
-                // Progress bar
                 if (_duration.inSeconds > 0)
                   Slider(
                     value: _position.inSeconds
@@ -411,7 +417,7 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
             ),
           ),
 
-          // Navigation arrows
+          // Navigation
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -430,9 +436,7 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
               Text(
                 '${_currentIndex + 1} / ${widget.surahs.length}',
                 style: TextStyle(
-                  color: cs.onSurface.withOpacity(0.5),
-                  fontSize: 13,
-                ),
+                    color: cs.onSurface.withOpacity(0.5), fontSize: 13),
               ),
               TextButton.icon(
                 onPressed: _currentIndex > 0
@@ -451,20 +455,20 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
 
           const Divider(height: 1),
 
-          // Verses — swipeable between surahs
+          // Swipeable surah pages
           Expanded(
             child: PageView.builder(
               controller: _pageController,
-              reverse: true, // RTL: swipe right = next surah (lower number)
+              reverse: true,
               itemCount: widget.surahs.length,
               onPageChanged: (i) {
                 _stopAudio();
                 setState(() => _currentIndex = i);
               },
-              itemBuilder: (_, i) {
-                final surah = widget.surahs[i];
-                return _SurahContent(surah: surah);
-              },
+              itemBuilder: (_, i) => _SurahContent(
+                surah: widget.surahs[i],
+                fontSize: _fontSize,
+              ),
             ),
           ),
         ],
@@ -473,26 +477,51 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
   }
 }
 
-class _SurahContent extends StatelessWidget {
+// ─── Surah Content — lazy-loads verses, virtualized list ─────────────────────
+
+class _SurahContent extends StatefulWidget {
   final Surah surah;
-  const _SurahContent({required this.surah});
+  final double fontSize;
+  const _SurahContent({required this.surah, required this.fontSize});
+
+  @override
+  State<_SurahContent> createState() => _SurahContentState();
+}
+
+class _SurahContentState extends State<_SurahContent> {
+  List<Verse>? _verses;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_SurahContent old) {
+    super.didUpdateWidget(old);
+    if (old.surah.id != widget.surah.id) _load();
+  }
+
+  Future<void> _load() async {
+    final verses = await loadVerses(widget.surah.id);
+    if (mounted) setState(() => _verses = verses);
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // Build one flowing Mushaf-style text block with inline verse markers
-    final flowingText = surah.verses
-        .map((v) => '${v.text} ﴿${v.id}﴾')
-        .join(' ');
+    if (_verses == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Bismillah / surah name header
-          Padding(
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      itemCount: _verses!.length + 1,
+      itemBuilder: (ctx, i) {
+        if (i == 0) {
+          return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Column(
               children: [
@@ -502,59 +531,48 @@ class _SurahContent extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: cs.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(50),
-                    border: Border.all(color: cs.primary.withOpacity(0.3)),
+                    border:
+                        Border.all(color: cs.primary.withOpacity(0.3)),
                   ),
                   child: Text(
-                    surah.id != 9
+                    widget.surah.id != 9
                         ? 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'
-                        : surah.name,
+                        : widget.surah.name,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'ScheherazadeNew',
-                      fontSize: 22,
+                      fontSize: widget.fontSize,
                       color: cs.primary,
                     ),
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${surah.nameEn}  —  ${surah.versesCount} آية',
+                  '${widget.surah.nameEn}  —  ${widget.surah.versesCount} آية',
                   style: TextStyle(
-                    fontSize: 12,
-                    color: cs.onSurface.withOpacity(0.5),
-                  ),
+                      fontSize: 12,
+                      color: cs.onSurface.withOpacity(0.5)),
                 ),
               ],
             ),
-          ),
-
-          // All verses as one flowing justified block
-          if (surah.verses.isNotEmpty)
-            SelectableText(
-              flowingText,
-              textDirection: TextDirection.rtl,
-              textAlign: TextAlign.justify,
-              style: TextStyle(
-                fontFamily: 'ScheherazadeNew',
-                fontSize: 24,
-                height: 2.2,
-                color: cs.onSurface,
-              ),
-            )
-          else
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Text(
-                  'النص غير متوفر',
-                  style: TextStyle(color: cs.onSurface.withOpacity(0.4)),
-                ),
-              ),
+          );
+        }
+        final v = _verses![i - 1];
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(
+            '${v.text} ﴿${v.id}﴾',
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.justify,
+            style: TextStyle(
+              fontFamily: 'ScheherazadeNew',
+              fontSize: widget.fontSize,
+              height: 2.2,
+              color: cs.onSurface,
             ),
-
-          const SizedBox(height: 60),
-        ],
-      ),
+          ),
+        );
+      },
     );
   }
 }
