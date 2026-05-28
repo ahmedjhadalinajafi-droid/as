@@ -17,12 +17,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'announcements_page.dart';
+import 'events_page.dart';
 import 'hijri_calendar_page.dart';
 import 'mafatih_page.dart';
 import 'notification_service.dart';
 import 'prayer_times_page.dart';
 import 'qibla_page.dart';
 import 'quran_page.dart';
+import 'social_media_page.dart';
 import 'ziyarat_page.dart';
 
 // ─── Theme Provider ───────────────────────────────────────────────────────────
@@ -1258,6 +1260,18 @@ class MorePage extends StatelessWidget {
 
     final items = [
       _MoreItem(
+        icon: Icons.event_rounded,
+        label: 'الفعاليات',
+        color: const Color(0xFF9C27B0),
+        page: const EventsPage(),
+      ),
+      _MoreItem(
+        icon: Icons.share_rounded,
+        label: 'تواصل معنا',
+        color: const Color(0xFF1877F2),
+        page: const SocialMediaPage(),
+      ),
+      _MoreItem(
         icon: Icons.calendar_month,
         label: 'التقويم الهجري',
         color: const Color(0xFF4CAF50),
@@ -1272,7 +1286,7 @@ class MorePage extends StatelessWidget {
       _MoreItem(
         icon: Icons.explore,
         label: 'اتجاه القبلة',
-        color: const Color(0xFF9C27B0),
+        color: const Color(0xFF00BCD4),
         page: const QiblaPage(),
       ),
       _MoreItem(
