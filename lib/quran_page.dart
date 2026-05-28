@@ -417,18 +417,19 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
             ),
           ),
 
-          // Navigation
+          // Navigation — next (←) on LEFT, previous (→) on RIGHT (Arabic book convention)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // RIGHT side in RTL → previous surah (Fatiha side)
               TextButton.icon(
-                onPressed: _currentIndex < widget.surahs.length - 1
-                    ? () => _goTo(_currentIndex + 1)
+                onPressed: _currentIndex > 0
+                    ? () => _goTo(_currentIndex - 1)
                     : null,
                 icon: const Icon(Icons.arrow_back_ios, size: 14),
                 label: Text(
-                  _currentIndex < widget.surahs.length - 1
-                      ? widget.surahs[_currentIndex + 1].name
+                  _currentIndex > 0
+                      ? widget.surahs[_currentIndex - 1].name
                       : '',
                   style: const TextStyle(fontSize: 13),
                 ),
@@ -438,14 +439,15 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
                 style: TextStyle(
                     color: cs.onSurface.withOpacity(0.5), fontSize: 13),
               ),
+              // LEFT side in RTL → next surah (Al-Imran side)
               TextButton.icon(
-                onPressed: _currentIndex > 0
-                    ? () => _goTo(_currentIndex - 1)
+                onPressed: _currentIndex < widget.surahs.length - 1
+                    ? () => _goTo(_currentIndex + 1)
                     : null,
                 icon: const Icon(Icons.arrow_forward_ios, size: 14),
                 label: Text(
-                  _currentIndex > 0
-                      ? widget.surahs[_currentIndex - 1].name
+                  _currentIndex < widget.surahs.length - 1
+                      ? widget.surahs[_currentIndex + 1].name
                       : '',
                   style: const TextStyle(fontSize: 13),
                 ),
@@ -455,12 +457,15 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
 
           const Divider(height: 1),
 
-          // Swipeable surah pages — force LTR so swipe-right = back, swipe-left = forward
+          // PageView: reverse:true = next surah (higher index) is to the LEFT
+          // Swipe RIGHT → next surah enters from LEFT (like Arabic book)
+          // Swipe LEFT  → previous surah enters from RIGHT
           Expanded(
             child: Directionality(
               textDirection: TextDirection.ltr,
               child: PageView.builder(
                 controller: _pageController,
+                reverse: true,
                 itemCount: widget.surahs.length,
                 onPageChanged: (i) {
                   _stopAudio();
