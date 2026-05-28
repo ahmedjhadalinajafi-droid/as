@@ -193,32 +193,177 @@ class _MainShellState extends State<MainShell> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        extendBody: true,
         body: IndexedStack(index: _currentIndex, children: _pages),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (i) => setState(() => _currentIndex = i),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'الرئيسية',
+        bottomNavigationBar: _FloatingNavBar(
+          currentIndex: _currentIndex,
+          onTap: (i) => setState(() => _currentIndex = i),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Floating Animated Nav Bar ────────────────────────────────────────────────
+
+class _NavItem {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  const _NavItem({required this.icon, required this.selectedIcon, required this.label});
+}
+
+class _FloatingNavBar extends StatefulWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  const _FloatingNavBar({required this.currentIndex, required this.onTap});
+
+  @override
+  State<_FloatingNavBar> createState() => _FloatingNavBarState();
+}
+
+class _FloatingNavBarState extends State<_FloatingNavBar>
+    with TickerProviderStateMixin {
+  static const _items = [
+    _NavItem(icon: Icons.home_outlined,       selectedIcon: Icons.home_rounded,         label: 'الرئيسية'),
+    _NavItem(icon: Icons.menu_book_outlined,  selectedIcon: Icons.menu_book_rounded,    label: 'القرآن'),
+    _NavItem(icon: Icons.access_time_outlined,selectedIcon: Icons.access_time_filled,   label: 'الصلاة'),
+    _NavItem(icon: Icons.grid_view_outlined,  selectedIcon: Icons.grid_view_rounded,    label: 'المزيد'),
+  ];
+
+  late final List<AnimationController> _bounceCtrl;
+  late final List<Animation<double>> _bounceAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounceCtrl = List.generate(
+      _items.length,
+      (i) => AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 500),
+        value: i == widget.currentIndex ? 1.0 : 0.0,
+      ),
+    );
+    _bounceAnim = _bounceCtrl
+        .map((c) => Tween<double>(begin: 1.0, end: 1.25).animate(
+              CurvedAnimation(parent: c, curve: Curves.elasticOut),
+            ))
+        .toList();
+  }
+
+  @override
+  void didUpdateWidget(_FloatingNavBar old) {
+    super.didUpdateWidget(old);
+    if (old.currentIndex != widget.currentIndex) {
+      _bounceCtrl[old.currentIndex].reverse();
+      _bounceCtrl[widget.currentIndex].forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _bounceCtrl) c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const navy = Color(0xFF1B3D6F);
+    const gold = Color(0xFFC9A843);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF0D1B2E) : Colors.white;
+
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(
+              color: navy.withOpacity(0.22),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.menu_book_outlined),
-              selectedIcon: Icon(Icons.menu_book),
-              label: 'القرآن',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.access_time_outlined),
-              selectedIcon: Icon(Icons.access_time_filled),
-              label: 'الصلاة',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.grid_view_outlined),
-              selectedIcon: Icon(Icons.grid_view),
-              label: 'المزيد',
+            BoxShadow(
+              color: navy.withOpacity(0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: List.generate(_items.length, (i) {
+            final selected = i == widget.currentIndex;
+            return GestureDetector(
+              onTap: () => widget.onTap(i),
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeInOut,
+                padding: EdgeInsets.symmetric(
+                  horizontal: selected ? 18 : 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  gradient: selected
+                      ? const LinearGradient(
+                          colors: [navy, Color(0xFF2A5BA8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: navy.withOpacity(0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ScaleTransition(
+                      scale: _bounceAnim[i],
+                      child: Icon(
+                        selected ? _items[i].selectedIcon : _items[i].icon,
+                        color: selected ? gold : Colors.grey.shade400,
+                        size: 22,
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: selected
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(width: 7),
+                                Text(
+                                  _items[i].label,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'ScheherazadeNew',
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
         ),
       ),
     );
