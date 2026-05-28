@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +22,7 @@ class NotificationService {
   static const _announcementChannelId = 'announcements';
 
   Future<void> initialize() async {
+    if (kIsWeb) return;
     await _requestPermissions();
     await _initLocalNotifications();
     _listenForeground();
@@ -30,14 +31,12 @@ class NotificationService {
   }
 
   Future<void> _requestPermissions() async {
-    if (Platform.isAndroid) {
-      await _messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        criticalAlert: false,
-      );
-    }
+    await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      criticalAlert: false,
+    );
   }
 
   Future<void> _initLocalNotifications() async {
@@ -77,10 +76,7 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final notification = message.notification;
       if (notification == null) return;
-
-      final isAnnouncement =
-          message.data['type'] == 'announcement';
-
+      final isAnnouncement = message.data['type'] == 'announcement';
       await _localNotifications.show(
         notification.hashCode,
         notification.title ?? 'مسجد أهل البيت',
@@ -117,6 +113,7 @@ class NotificationService {
   }
 
   Future<void> showPrayerNotification(String prayerName) async {
+    if (kIsWeb) return;
     await _localNotifications.show(
       prayerName.hashCode,
       'حان وقت $prayerName',
@@ -134,6 +131,7 @@ class NotificationService {
   }
 
   Future<void> cancelAll() async {
+    if (kIsWeb) return;
     await _localNotifications.cancelAll();
   }
 }

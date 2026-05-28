@@ -1,9 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:intl/intl.dart';
 
 class AnnouncementsPage extends StatelessWidget {
@@ -58,8 +58,7 @@ class AnnouncementsPage extends StatelessWidget {
             itemCount: docs.length,
             itemBuilder: (ctx, i) {
               final data = docs[i].data() as Map<String, dynamic>;
-              return _AnnouncementCard(
-                  data: data, docId: docs[i].id);
+              return _AnnouncementCard(data: data, docId: docs[i].id);
             },
           );
         },
@@ -100,8 +99,7 @@ class _AnnouncementCard extends StatelessWidget {
               placeholder: (_, __) => Container(
                 height: 200,
                 color: cs.primary.withOpacity(0.1),
-                child:
-                    const Center(child: CircularProgressIndicator()),
+                child: const Center(child: CircularProgressIndicator()),
               ),
               errorWidget: (_, __, ___) => Container(
                 height: 60,
@@ -125,7 +123,8 @@ class _AnnouncementCard extends StatelessWidget {
                 if (title.isNotEmpty && body.isNotEmpty)
                   const SizedBox(height: 8),
                 if (body.isNotEmpty)
-                  Text(body, style: const TextStyle(fontSize: 15, height: 1.6)),
+                  Text(body,
+                      style: const TextStyle(fontSize: 15, height: 1.6)),
                 if (dateStr.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Row(
@@ -159,15 +158,15 @@ class _AddAnnouncementPage extends StatefulWidget {
   const _AddAnnouncementPage();
 
   @override
-  State<_AddAnnouncementPage> createState() =>
-      _AddAnnouncementPageState();
+  State<_AddAnnouncementPage> createState() => _AddAnnouncementPageState();
 }
 
 class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _body = TextEditingController();
-  File? _image;
+  XFile? _image;
+  Uint8List? _imageBytes;
   bool _uploading = false;
 
   @override
@@ -182,7 +181,11 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
     final picked =
         await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
     if (picked != null && mounted) {
-      setState(() => _image = File(picked.path));
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _image = picked;
+        _imageBytes = bytes;
+      });
     }
   }
 
@@ -192,10 +195,10 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
 
     try {
       String imageUrl = '';
-      if (_image != null) {
+      if (_image != null && _imageBytes != null) {
         final ref = FirebaseStorage.instance
             .ref('announcements/${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await ref.putFile(_image!);
+        await ref.putData(_imageBytes!);
         imageUrl = await ref.getDownloadURL();
       }
 
@@ -260,25 +263,24 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
                         style: BorderStyle.solid),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: _image != null
-                      ? Image.file(_image!, fit: BoxFit.cover)
+                  child: _imageBytes != null
+                      ? Image.memory(_imageBytes!, fit: BoxFit.cover)
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.add_photo_alternate_outlined,
-                                size: 48, color: cs.primary.withOpacity(0.5)),
+                                size: 48,
+                                color: cs.primary.withOpacity(0.5)),
                             const SizedBox(height: 8),
                             Text('اضغط لإضافة صورة',
                                 style: TextStyle(
-                                    color:
-                                        cs.onSurface.withOpacity(0.5))),
+                                    color: cs.onSurface.withOpacity(0.5))),
                           ],
                         ),
                 ),
               ),
               const SizedBox(height: 16),
 
-              // Title
               TextFormField(
                 controller: _title,
                 textDirection: TextDirection.rtl,
@@ -293,7 +295,6 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
               ),
               const SizedBox(height: 12),
 
-              // Body
               TextFormField(
                 controller: _body,
                 textDirection: TextDirection.rtl,

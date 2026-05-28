@@ -321,6 +321,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _updateWidget(Map<String, String> times) async {
+    if (kIsWeb) return;
     try {
       await HomeWidget.saveWidgetData<String>('fajr', times['fajr'] ?? '');
       await HomeWidget.saveWidgetData<String>('dhuhr', times['dhuhr'] ?? '');
