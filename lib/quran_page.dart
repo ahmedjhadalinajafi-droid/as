@@ -526,37 +526,20 @@ class _SurahContent extends StatelessWidget {
         }
 
         final verse = surah.verses[i - 1];
+        // Verse number glyph appended inline (Mushaf style)
+        final verseEnd = ' ﴿${verse.id}﴾';
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  verse.text,
-                  textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.justify,
-                  style: const TextStyle(
-                    fontFamily: 'ScheherazadeNew',
-                    fontSize: 24,
-                    height: 2,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: cs.primary.withOpacity(0.1),
-                child: Text(
-                  '${verse.id}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cs.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Text(
+            verse.text + verseEnd,
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.justify,
+            style: TextStyle(
+              fontFamily: 'ScheherazadeNew',
+              fontSize: 24,
+              height: 2.1,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         );
       },

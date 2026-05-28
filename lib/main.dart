@@ -9,7 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:hijri/hijri_calendar.dart';
 import 'package:intl/date_symbol_data_local.dart';
+
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -207,23 +209,27 @@ class _MainShellState extends State<MainShell> {
         color: isDark ? const Color(0xFF0A1628) : Colors.white,
         child: Stack(
           children: [
+            // Pattern layer — same image in both modes, with dark overlay in dark mode
             Positioned.fill(
-              child: isDark
-                  // Dark mode: draw gold stars in code (JPEG would cover dark bg)
-                  ? CustomPaint(
+              child: Stack(
+                children: [
+                  Image.asset(
+                    'assets/images/bg_pattern.png',
+                    repeat: ImageRepeat.repeat,
+                    fit: BoxFit.none,
+                    errorBuilder: (_, __, ___) => CustomPaint(
                       painter: _IslamicPatternPainter(
-                          gold.withOpacity(0.18)),
-                    )
-                  // Light mode: user's pattern image as-is (white on white)
-                  : Image.asset(
-                      'assets/images/bg_pattern.png',
-                      repeat: ImageRepeat.repeat,
-                      fit: BoxFit.none,
-                      errorBuilder: (_, __, ___) => CustomPaint(
-                        painter: _IslamicPatternPainter(
-                            Colors.grey.withOpacity(0.12)),
+                        isDark
+                            ? gold.withOpacity(0.18)
+                            : Colors.grey.withOpacity(0.12),
                       ),
                     ),
+                  ),
+                  // Dark overlay to keep dark mode readable
+                  if (isDark)
+                    Container(color: const Color(0xFF0A1628).withOpacity(0.88)),
+                ],
+              ),
             ),
             Scaffold(
               extendBody: true,
@@ -692,7 +698,11 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+
+            // Dual date banner — Hijri + Gregorian
+            const _DualDateBanner(),
+            const SizedBox(height: 16),
 
             // Next prayer card
             if (_nextPrayer.isNotEmpty)
@@ -815,6 +825,121 @@ class _HomePageState extends State<HomePage> {
 }
 
 // ─── More Page ────────────────────────────────────────────────────────────────
+
+// ─── Home Announcements Section ──────────────────────────────────────────────
+
+// ─── Dual Date Banner ────────────────────────────────────────────────────────
+
+class _DualDateBanner extends StatelessWidget {
+  const _DualDateBanner();
+
+  static const _hijriMonths = [
+    'محرم','صفر','ربيع الأول','ربيع الثاني',
+    'جمادى الأولى','جمادى الثانية','رجب','شعبان',
+    'رمضان','شوال','ذو القعدة','ذو الحجة',
+  ];
+
+  static const _arDays = [
+    'الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد',
+  ];
+
+  static const _arMonths = [
+    'يناير','فبراير','مارس','أبريل','مايو','يونيو',
+    'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    const navy = Color(0xFF1B3D6F);
+    const gold = Color(0xFFC9A843);
+
+    final now = DateTime.now();
+    final hijri = HijriCalendar.now();
+
+    final dayName = _arDays[now.weekday - 1];
+    final gregStr = '$dayName  ${now.day} ${_arMonths[now.month - 1]} ${now.year}م';
+    final hijriStr = '${hijri.hDay} ${_hijriMonths[hijri.hMonth - 1]} ${hijri.hYear}هـ';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: navy.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: gold.withOpacity(0.3), width: 0.8),
+      ),
+      child: Row(
+        children: [
+          // Hijri date
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.nightlight_round, size: 14, color: gold),
+                    const SizedBox(width: 5),
+                    Text('هجري',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: cs.onSurface.withOpacity(0.5))),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  hijriStr,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: navy,
+                    fontFamily: 'ScheherazadeNew',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Divider
+          Container(
+            width: 1,
+            height: 36,
+            color: gold.withOpacity(0.3),
+          ),
+          const SizedBox(width: 12),
+          // Gregorian date
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text('ميلادي',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: cs.onSurface.withOpacity(0.5))),
+                    const SizedBox(width: 5),
+                    Icon(Icons.wb_sunny_outlined, size: 14, color: gold),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  gregStr,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: navy,
+                    fontFamily: 'ScheherazadeNew',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // ─── Home Announcements Section ──────────────────────────────────────────────
 

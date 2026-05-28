@@ -298,16 +298,22 @@ class _ChapterReaderPageState extends State<_ChapterReaderPage> {
                         ),
                       ],
                       const SizedBox(height: 24),
-                      SelectableText(
-                        ch.content,
-                        textDirection: TextDirection.rtl,
-                        textAlign: TextAlign.justify,
-                        style: TextStyle(
-                          fontFamily: 'ScheherazadeNew',
-                          fontSize: _fontSize,
-                          height: 2.2,
-                        ),
-                      ),
+                      // Split by newline so each line is its own full-width block
+                      ...ch.content.split('\n').map((line) => line.trim().isEmpty
+                          ? const SizedBox(height: 12)
+                          : Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: SelectableText(
+                                line,
+                                textDirection: TextDirection.rtl,
+                                textAlign: TextAlign.justify,
+                                style: TextStyle(
+                                  fontFamily: 'ScheherazadeNew',
+                                  fontSize: _fontSize,
+                                  height: 2.1,
+                                ),
+                              ),
+                            )),
                       const SizedBox(height: 40),
                     ],
                   ),
