@@ -455,18 +455,22 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
 
           const Divider(height: 1),
 
-          // Swipeable surah pages
+          // Swipeable surah pages — force LTR so swipe-right = back, swipe-left = forward
           Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.surahs.length,
-              onPageChanged: (i) {
-                _stopAudio();
-                setState(() => _currentIndex = i);
-              },
-              itemBuilder: (_, i) => _SurahContent(
-                surah: widget.surahs[i],
-                fontSize: _fontSize,
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: PageView.builder(
+                controller: _pageController,
+                reverse: true,
+                itemCount: widget.surahs.length,
+                onPageChanged: (i) {
+                  _stopAudio();
+                  setState(() => _currentIndex = i);
+                },
+                itemBuilder: (_, i) => _SurahContent(
+                  surah: widget.surahs[i],
+                  fontSize: _fontSize,
+                ),
               ),
             ),
           ),
