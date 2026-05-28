@@ -18,6 +18,10 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   String _countdown = '';
   String _nextPrayer = '';
 
+  static const _navy = Color(0xFF1B3D6F);
+  static const _gold = Color(0xFFC9A843);
+  static const _green = Color(0xFF4CAF50);
+
   static const _prayerNames = {
     'fajr': 'الفجر',
     'sunrise': 'الشروق',
@@ -25,6 +29,15 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     'asr': 'العصر',
     'maghrib': 'المغرب',
     'isha': 'العشاء',
+  };
+
+  static const _prayerNamesEn = {
+    'fajr': 'Morning Prayer',
+    'sunrise': 'Sunrise',
+    'dhuhr': 'Midday Prayer',
+    'asr': 'Afternoon Prayer',
+    'maghrib': 'Evening Prayer',
+    'isha': 'Night Prayer',
   };
 
   static const _prayerIcons = {
@@ -35,6 +48,21 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     'maghrib': Icons.brightness_4,
     'isha': Icons.nights_stay,
   };
+
+  // Convert "HH:mm" 24h to Arabic 12h with ص/م
+  static String _toArabicTime(String t) {
+    const arDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+    final parts = t.split(':');
+    if (parts.length < 2) return t;
+    int h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    final suffix = h < 12 ? 'ص' : 'م';
+    if (h == 0) h = 12;
+    else if (h > 12) h -= 12;
+    String convert(int n) =>
+        n.toString().split('').map((c) => arDigits[int.parse(c)]).join();
+    return '${convert(h)}:${convert(m).padLeft(2, '٠')} $suffix';
+  }
 
   @override
   void initState() {
@@ -139,73 +167,111 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
 
                   // Countdown card
                   if (_nextPrayer.isNotEmpty)
-                    Card(
-                      color: cs.primary,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('الصلاة القادمة',
-                                    style: TextStyle(
-                                        color: Colors.white70, fontSize: 13)),
-                                const SizedBox(height: 4),
-                                Text(_nextPrayer,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                const Text('الوقت المتبقي',
-                                    style: TextStyle(
-                                        color: Colors.white70, fontSize: 13)),
-                                const SizedBox(height: 4),
-                                Text(_countdown,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ],
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [_navy, Color(0xFF2A5BA8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _navy.withOpacity(0.4),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('الصلاة القادمة',
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontSize: 13)),
+                              const SizedBox(height: 6),
+                              Text(_nextPrayer,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('الوقت المتبقي',
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontSize: 13)),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(_countdown,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.5)),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
 
                   const SizedBox(height: 16),
 
-                  // Today's prayer times
-                  Card(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Text(
-                              'أوقات الصلاة - اليوم',
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.primary),
-                            ),
+                  // Today's prayer times — dark-themed list card
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cs.brightness == Brightness.dark
+                          ? const Color(0xFF0D1B2E)
+                          : const Color(0xFF1B3D6F).withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: _gold.withOpacity(0.25), width: 0.8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                          child: Row(
+                            children: [
+                              Icon(Icons.access_time_filled,
+                                  size: 16, color: _gold),
+                              const SizedBox(width: 8),
+                              Text(
+                                'أوقات الصلاة - اليوم',
+                                style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: cs.brightness == Brightness.dark
+                                        ? Colors.white
+                                        : _navy),
+                              ),
+                            ],
                           ),
-                          const Divider(),
-                          ..._buildTodayRows(cs),
-                        ],
-                      ),
+                        ),
+                        Divider(
+                            color: _gold.withOpacity(0.2),
+                            thickness: 0.8,
+                            indent: 16,
+                            endIndent: 16),
+                        ..._buildTodayRows(cs),
+                        const SizedBox(height: 8),
+                      ],
                     ),
                   ),
 
@@ -246,13 +312,14 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     final times = _todayTimes;
     final now = TimeOfDay.now();
     final order = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    final isDark = cs.brightness == Brightness.dark;
 
     return order.map((key) {
       final time = times[key] ?? '--:--';
       final name = _prayerNames[key] ?? key;
+      final nameEn = _prayerNamesEn[key] ?? key;
       final icon = _prayerIcons[key] ?? Icons.access_time;
 
-      // Is this the next prayer?
       bool isNext = false;
       final parts = time.split(':');
       if (parts.length >= 2) {
@@ -262,37 +329,100 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
             (h > now.hour || (h == now.hour && m > now.minute));
       }
 
-      return ListTile(
-        leading: Icon(icon,
-            color: isNext ? cs.primary : Colors.grey, size: 22),
-        title: Text(
-          name,
-          style: TextStyle(
-            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
-            color: isNext ? cs.primary : null,
-          ),
+      final rowBg = isNext
+          ? (isDark ? const Color(0xFF1A2F1A) : const Color(0xFFE8F5E9))
+          : Colors.transparent;
+
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          color: rowBg,
+          borderRadius: BorderRadius.circular(12),
+          border: isNext
+              ? Border.all(color: _green.withOpacity(0.4), width: 1)
+              : null,
         ),
-        trailing: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: isNext
-                ? cs.primary.withOpacity(0.1)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color:
-                  isNext ? cs.primary : Colors.grey.withOpacity(0.3),
-            ),
-          ),
-          child: Text(
-            time,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
-              color: isNext ? cs.primary : null,
-              letterSpacing: 1.5,
-            ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              // Left: prayer icon in circle
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isNext
+                      ? _green.withOpacity(0.15)
+                      : (isDark ? Colors.white10 : Colors.black.withOpacity(0.06)),
+                ),
+                child: Icon(icon,
+                    size: 20,
+                    color: isNext ? _green : cs.onSurface.withOpacity(0.5)),
+              ),
+              const SizedBox(width: 12),
+
+              // Center: bell + names
+              Expanded(
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 400),
+                      decoration: isNext
+                          ? BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _green.withOpacity(0.5),
+                                  blurRadius: 8,
+                                  spreadRadius: 1,
+                                )
+                              ])
+                          : null,
+                      child: Icon(
+                        isNext ? Icons.notifications_active : Icons.notifications_outlined,
+                        size: 18,
+                        color: isNext ? _green : cs.onSurface.withOpacity(0.35),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          nameEn,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontFamily: 'sans-serif',
+                            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
+                            color: isNext ? _green : cs.onSurface.withOpacity(0.7),
+                          ),
+                        ),
+                        Text(
+                          name,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
+                            color: isNext ? _green : cs.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Right: Arabic time
+              Text(
+                _toArabicTime(time),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
+                  color: isNext ? _green : cs.onSurface,
+                  fontFamily: 'ScheherazadeNew',
+                ),
+              ),
+            ],
           ),
         ),
       );

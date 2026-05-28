@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -511,27 +512,21 @@ class _HomePageState extends State<HomePage> {
   String _nextPrayer = '';
   String _nextPrayerTime = '';
   bool _loading = true;
-  late final PageController _prayerPageController;
-  int _prayerPageIndex = 0;
+  Timer? _countdownTimer;
+  String _countdown = '';
 
-  static const _prayers = [
-    ('fajr',    'الفجر',  Icons.brightness_3),
-    ('dhuhr',   'الظهر',  Icons.wb_sunny),
-    ('asr',     'العصر',  Icons.brightness_5),
-    ('maghrib', 'المغرب', Icons.brightness_4),
-    ('isha',    'العشاء', Icons.nights_stay),
-  ];
+  static const _navy = Color(0xFF1B3D6F);
+  static const _gold = Color(0xFFC9A843);
 
   @override
   void initState() {
     super.initState();
-    _prayerPageController = PageController(viewportFraction: 0.82);
     _loadPrayerTimes();
   }
 
   @override
   void dispose() {
-    _prayerPageController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -599,27 +594,43 @@ class _HomePageState extends State<HomePage> {
       final m = int.tryParse(parts[1]) ?? 0;
       if (h > now.hour || (h == now.hour && m > now.minute)) {
         if (!mounted) return;
-        final idx = order.indexOf(key);
         setState(() {
           _nextPrayer = names[key] ?? key;
           _nextPrayerTime = t;
-          _prayerPageIndex = idx;
         });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _prayerPageController.hasClients) {
-            _prayerPageController.jumpToPage(idx);
-          }
-        });
+        _startCountdown(h, m);
         return;
       }
     }
-    // After isha — next is fajr (index 0)
     if (!mounted) return;
     setState(() {
       _nextPrayer = 'الفجر';
       _nextPrayerTime = times['fajr'] ?? '';
-      _prayerPageIndex = 0;
     });
+    final parts = (times['fajr'] ?? '').split(':');
+    if (parts.length >= 2) {
+      _startCountdown(int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
+    }
+  }
+
+  void _startCountdown(int targetH, int targetM) {
+    _countdownTimer?.cancel();
+    void tick() {
+      if (!mounted) return;
+      final now = DateTime.now();
+      var target = DateTime(now.year, now.month, now.day, targetH, targetM);
+      if (target.isBefore(now)) target = target.add(const Duration(days: 1));
+      final diff = target.difference(now);
+      final h = diff.inHours;
+      final m = diff.inMinutes.remainder(60);
+      final s = diff.inSeconds.remainder(60);
+      setState(() {
+        _countdown =
+            '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+      });
+    }
+    tick();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
   }
 
   Future<void> _updateWidget(Map<String, String> times) async {
@@ -652,225 +663,323 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
     final cs = Theme.of(context).colorScheme;
+    final isDark = theme.isDark;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'مسجد وحسينية أهل البيت',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            onPressed: theme.toggle,
-            icon: Icon(theme.isDark ? Icons.light_mode : Icons.dark_mode),
-            tooltip: theme.isDark ? 'وضع النهار' : 'الوضع الليلي',
+      body: Stack(
+        children: [
+          // Gradient background
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [const Color(0xFF0A1628), const Color(0xFF1B3D6F)]
+                    : [const Color(0xFF1B3D6F), const Color(0xFF2A5BA8)],
+                begin: Alignment.topCenter,
+                end: Alignment.center,
+              ),
+            ),
+          ),
+          // Bottom white/surface area
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              height: MediaQuery.of(context).size.height * 0.55,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+            ),
+          ),
+          // Islamic pattern overlay on top gradient
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: MediaQuery.of(context).size.height * 0.48,
+            child: CustomPaint(
+              painter: _IslamicPatternPainter(Colors.white.withOpacity(0.05)),
+            ),
+          ),
+
+          SafeArea(
+            child: Column(
+              children: [
+                // AppBar row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        onPressed: theme.toggle,
+                        icon: Icon(
+                          isDark ? Icons.light_mode : Icons.dark_mode,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Text(
+                        'مسجد أهل البيت ع',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'ScheherazadeNew',
+                        ),
+                      ),
+                      const Icon(Icons.mosque, color: _gold, size: 26),
+                    ],
+                  ),
+                ),
+
+                // Hijri date
+                const _HijriDateChip(),
+                const SizedBox(height: 16),
+
+                // Countdown card
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _loading
+                      ? const SizedBox(
+                          height: 100,
+                          child: Center(child: CircularProgressIndicator(color: Colors.white)))
+                      : _buildCountdownCard(),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Scrollable content
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                    child: RefreshIndicator(
+                      onRefresh: _loadPrayerTimes,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
+                        children: [
+                          // Quick actions
+                          _buildQuickActions(context, cs),
+                          const SizedBox(height: 20),
+
+                          // Announcements
+                          const _HomeAnnouncementsSection(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadPrayerTimes,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Logo
-            Center(
-              child: Image.asset(
-                'assets/images/logo.png',
-                height: 120,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.mosque,
-                  size: 100,
-                  color: cs.primary,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Masjid name
-            Center(
-              child: Text(
-                'مسجد وحسينية أهل البيت عليهم السلام',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: cs.primary,
-                ),
-              ),
-            ),
-            Center(
-              child: Text(
-                'بغداد - المنصور',
-                style: TextStyle(fontSize: 15, color: cs.secondary),
-              ),
-            ),
-            const SizedBox(height: 6),
-            // Gold divider — matches logo
-            Center(
-              child: Container(
-                width: 120,
-                height: 3,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Colors.transparent, Color(0xFFC9A843), Colors.transparent],
-                  ),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Dual date banner — Hijri + Gregorian
-            const _DualDateBanner(),
-            const SizedBox(height: 16),
-
-            // Prayer times carousel
-            if (_loading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else
-              _buildPrayerCarousel(cs),
-
-            const SizedBox(height: 20),
-
-            // Latest announcements
-            const _HomeAnnouncementsSection(),
-
-            // Bottom padding for floating nav
-            const SizedBox(height: 100),
-          ],
-        ),
       ),
     );
   }
 
-  Widget _buildPrayerCarousel(ColorScheme cs) {
-    return Column(
+  Widget _buildCountdownCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _gold.withOpacity(0.5), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Text(
+            'وقت صلاة $_nextPrayer في بغداد',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.85),
+              fontSize: 14,
+              fontFamily: 'ScheherazadeNew',
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _countdown.isEmpty ? '--:--:--' : _countdown,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 44,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.access_time, size: 13, color: _gold),
+              const SizedBox(width: 5),
+              Text(
+                _nextPrayerTime,
+                style: const TextStyle(color: _gold, fontSize: 13),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions(BuildContext context, ColorScheme cs) {
+    final isDark = cs.brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E2D4A) : Colors.white;
+
+    return Row(
       children: [
-        SizedBox(
-          height: 160,
-          child: PageView.builder(
-            controller: _prayerPageController,
-            itemCount: _prayers.length,
-            onPageChanged: (i) => setState(() => _prayerPageIndex = i),
-            itemBuilder: (ctx, i) {
-              final key  = _prayers[i].$1;
-              final name = _prayers[i].$2;
-              final icon = _prayers[i].$3;
-              final time = _todayPrayers[key] ?? '--:--';
-              return _PrayerCard(
-                name: name,
-                time: time,
-                icon: icon,
-                isNext: name == _nextPrayer,
-                cs: cs,
-              );
+        Expanded(
+          child: _QuickActionCard(
+            icon: Icons.menu_book_rounded,
+            label: 'القرآن الكريم',
+            sublabel: 'The Holy Quran',
+            color: const Color(0xFF1B3D6F),
+            bg: cardBg,
+            onTap: () {
+              // Switch to Quran tab (index 1) via MainShell
+              final shell = context.findAncestorStateOfType<_MainShellState>();
+              shell?.setState(() => shell._currentIndex = 1);
             },
           ),
         ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_prayers.length, (i) {
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: i == _prayerPageIndex ? 20 : 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: i == _prayerPageIndex
-                    ? cs.primary
-                    : cs.primary.withOpacity(0.25),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            );
-          }),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _QuickActionCard(
+            icon: Icons.access_time_filled,
+            label: 'أوقات الصلاة',
+            sublabel: 'Prayer Times',
+            color: const Color(0xFF4CAF50),
+            bg: cardBg,
+            onTap: () {
+              final shell = context.findAncestorStateOfType<_MainShellState>();
+              shell?.setState(() => shell._currentIndex = 2);
+            },
+          ),
         ),
       ],
     );
   }
 }
 
-// ─── Prayer Card ─────────────────────────────────────────────────────────────
+// ─── Quick Action Card ────────────────────────────────────────────────────────
 
-class _PrayerCard extends StatelessWidget {
-  final String name;
-  final String time;
+class _QuickActionCard extends StatelessWidget {
   final IconData icon;
-  final bool isNext;
-  final ColorScheme cs;
-  const _PrayerCard({
-    required this.name,
-    required this.time,
+  final String label;
+  final String sublabel;
+  final Color color;
+  final Color bg;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
     required this.icon,
-    required this.isNext,
-    required this.cs,
+    required this.label,
+    required this.sublabel,
+    required this.color,
+    required this.bg,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    const navy = Color(0xFF1B3D6F);
-    const gold = Color(0xFFC9A843);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
         decoration: BoxDecoration(
-          color: isNext ? navy : cs.surface,
+          color: bg,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isNext ? gold : cs.outline.withOpacity(0.3),
-            width: isNext ? 1.5 : 0.8,
-          ),
-          boxShadow: isNext
-              ? [
-                  BoxShadow(
-                    color: navy.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  )
-                ]
-              : null,
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.12),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: color.withOpacity(0.2), width: 0.8),
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 26, color: isNext ? gold : cs.primary),
-            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(height: 10),
             Text(
-              name,
+              label,
+              textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: isNext ? Colors.white : cs.onSurface,
+                color: color,
+                fontFamily: 'ScheherazadeNew',
               ),
             ),
-            const SizedBox(height: 4),
             Text(
-              time,
+              sublabel,
+              textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 22,
-                letterSpacing: 2,
-                fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
-                color: isNext ? Colors.white : cs.onSurface,
+                fontSize: 11,
+                color: color.withOpacity(0.6),
+                fontFamily: 'sans-serif',
               ),
             ),
-            if (isNext)
-              Padding(
-                padding: const EdgeInsets.only(top: 3),
-                child: Text(
-                  'الصلاة القادمة',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withOpacity(0.65),
-                  ),
-                ),
-              ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Hijri Date Chip ─────────────────────────────────────────────────────────
+
+class _HijriDateChip extends StatelessWidget {
+  const _HijriDateChip();
+
+  static const _hijriMonths = [
+    'محرم','صفر','ربيع الأول','ربيع الثاني',
+    'جمادى الأولى','جمادى الثانية','رجب','شعبان',
+    'رمضان','شوال','ذو القعدة','ذو الحجة',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final hijri = HijriCalendar.now();
+    final hijriStr =
+        '${hijri.hDay} ${_hijriMonths[hijri.hMonth - 1]} ${hijri.hYear} هـ';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFC9A843).withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.nightlight_round, size: 14, color: Color(0xFFC9A843)),
+          const SizedBox(width: 6),
+          Text(
+            hijriStr,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontFamily: 'ScheherazadeNew',
+            ),
+          ),
+        ],
       ),
     );
   }
