@@ -145,14 +145,12 @@ class MasjidApp extends StatelessWidget {
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 0,
-        color: isDark
-            ? Colors.white.withOpacity(0.06)
-            : Colors.white.withOpacity(0.72),
+        elevation: 1,
+        color: isDark ? const Color(0xFF1E2D4A) : Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: BorderSide(
-            color: gold.withOpacity(isDark ? 0.18 : 0.15),
+            color: isDark ? const Color(0xFF3A5070) : const Color(0xFFE8D8A0),
             width: 0.8,
           ),
         ),
@@ -202,58 +200,42 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  // Pages are built lazily — only when first visited
+  final Map<int, Widget> _pageCache = {};
 
-  final List<Widget> _pages = const [
-    HomePage(),
-    QuranPage(),
-    PrayerTimesPage(),
-    MorePage(),
+  static const _pageBuilders = [
+    HomePage.new,
+    QuranPage.new,
+    PrayerTimesPage.new,
+    MorePage.new,
   ];
+
+  Widget _page(int i) => _pageCache.putIfAbsent(
+      i, () => _pageBuilders[i]());
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const gold = Color(0xFFC9A843);
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Container(
-        // Warm cream base in light mode, dark navy in dark mode
-        color: isDark ? const Color(0xFF0A1628) : Colors.white,
-        child: Stack(
+      child: Scaffold(
+        backgroundColor:
+            isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
+        extendBody: true,
+        body: Stack(
           children: [
-            // Pattern layer — same image in both modes, with dark overlay in dark mode
-            Positioned.fill(
-              child: Stack(
-                children: [
-                  Image.asset(
-                    'assets/images/bg_pattern.png',
-                    repeat: ImageRepeat.repeat,
-                    fit: BoxFit.none,
-                    errorBuilder: (_, __, ___) => CustomPaint(
-                      painter: _IslamicPatternPainter(
-                        isDark
-                            ? gold.withOpacity(0.18)
-                            : Colors.grey.withOpacity(0.12),
-                      ),
-                    ),
-                  ),
-                  // Dark overlay to keep dark mode readable
-                  if (isDark)
-                    Container(color: const Color(0xFF0A1628).withOpacity(0.88)),
-                ],
-              ),
-            ),
-            Scaffold(
-              extendBody: true,
-              backgroundColor: Colors.transparent,
-              body: IndexedStack(index: _currentIndex, children: _pages),
-              bottomNavigationBar: _FloatingNavBar(
-                currentIndex: _currentIndex,
-                onTap: (i) => setState(() => _currentIndex = i),
-              ),
-            ),
+            for (int i = 0; i < _pageBuilders.length; i++)
+              if (_pageCache.containsKey(i) || i == _currentIndex)
+                Offstage(
+                  offstage: i != _currentIndex,
+                  child: _page(i),
+                ),
           ],
+        ),
+        bottomNavigationBar: _FloatingNavBar(
+          currentIndex: _currentIndex,
+          onTap: (i) => setState(() => _currentIndex = i),
         ),
       ),
     );
