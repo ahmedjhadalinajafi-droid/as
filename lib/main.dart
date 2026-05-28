@@ -101,7 +101,6 @@ class MasjidApp extends StatelessWidget {
   }
 
   ThemeData _buildTheme(Brightness brightness) {
-    // Logo colors: navy blue + gold accent
     const navy = Color(0xFF1B3D6F);
     const gold = Color(0xFFC9A843);
     final isDark = brightness == Brightness.dark;
@@ -131,9 +130,16 @@ class MasjidApp extends StatelessWidget {
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 2,
+        elevation: 0,
+        color: isDark
+            ? Colors.white.withOpacity(0.06)
+            : Colors.white.withOpacity(0.72),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: gold.withOpacity(isDark ? 0.18 : 0.15),
+            width: 0.8,
+          ),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -192,10 +198,10 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF0A1628) : Colors.white;
-    final patternColor = isDark
-        ? Colors.white.withOpacity(0.04)
-        : const Color(0xFF1B3D6F).withOpacity(0.055);
+    final bgColor = isDark ? const Color(0xFF0A1628) : const Color(0xFFF8F4EC);
+    // Gold — same as logo
+    const gold = Color(0xFFC9A843);
+    final patternColor = gold.withOpacity(isDark ? 0.18 : 0.22);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -203,9 +209,16 @@ class _MainShellState extends State<MainShell> {
         color: bgColor,
         child: Stack(
           children: [
+            // Try the user's pattern image first; CustomPainter is the fallback
             Positioned.fill(
-              child: CustomPaint(
-                painter: _IslamicPatternPainter(patternColor),
+              child: Image.asset(
+                'assets/images/bg_pattern.png',
+                repeat: ImageRepeat.repeat,
+                color: patternColor,
+                colorBlendMode: BlendMode.srcIn,
+                errorBuilder: (_, __, ___) => CustomPaint(
+                  painter: _IslamicPatternPainter(patternColor),
+                ),
               ),
             ),
             Scaffold(
@@ -680,9 +693,10 @@ class _HomePageState extends State<HomePage> {
             // Next prayer card
             if (_nextPrayer.isNotEmpty)
               Card(
-                color: const Color(0xFF1B3D6F),
+                color: const Color(0xFF1B3D6F).withOpacity(0.55),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: Color(0xFFC9A843), width: 1)),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
