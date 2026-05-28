@@ -283,7 +283,6 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
 
               TextFormField(
                 controller: _title,
-                textDirection: TextDirection.rtl,
                 decoration: InputDecoration(
                   labelText: 'العنوان',
                   border: OutlineInputBorder(
@@ -297,7 +296,6 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
 
               TextFormField(
                 controller: _body,
-                textDirection: TextDirection.rtl,
                 maxLines: 5,
                 decoration: InputDecoration(
                   labelText: 'نص الإعلان',
