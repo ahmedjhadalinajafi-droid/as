@@ -204,7 +204,7 @@ class _MainShellState extends State<MainShell> {
       textDirection: TextDirection.rtl,
       child: Container(
         // Warm cream base in light mode, dark navy in dark mode
-        color: isDark ? const Color(0xFF0A1628) : const Color(0xFFF8F6EE),
+        color: isDark ? const Color(0xFF0A1628) : Colors.white,
         child: Stack(
           children: [
             Positioned.fill(
@@ -214,19 +214,14 @@ class _MainShellState extends State<MainShell> {
                       painter: _IslamicPatternPainter(
                           gold.withOpacity(0.18)),
                     )
-                  // Light mode: use the user's image tinted gold via multiply
-                  // multiply(white→gold, grey_lines→darker_gold) = beautiful parchment
-                  : ColorFiltered(
-                      colorFilter: const ColorFilter.mode(
-                          gold, BlendMode.multiply),
-                      child: Image.asset(
-                        'assets/images/bg_pattern.png',
-                        repeat: ImageRepeat.repeat,
-                        fit: BoxFit.none,
-                        errorBuilder: (_, __, ___) => CustomPaint(
-                          painter: _IslamicPatternPainter(
-                              gold.withOpacity(0.22)),
-                        ),
+                  // Light mode: user's pattern image as-is (white on white)
+                  : Image.asset(
+                      'assets/images/bg_pattern.png',
+                      repeat: ImageRepeat.repeat,
+                      fit: BoxFit.none,
+                      errorBuilder: (_, __, ___) => CustomPaint(
+                        painter: _IslamicPatternPainter(
+                            Colors.grey.withOpacity(0.12)),
                       ),
                     ),
             ),
