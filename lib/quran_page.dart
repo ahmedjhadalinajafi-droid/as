@@ -515,22 +515,16 @@ class _SurahContentState extends State<_SurahContent> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Group verses into 30-verse flowing chunks (Mushaf paragraph style)
-    const chunkSize = 30;
-    final chunks = <String>[];
-    for (int i = 0; i < _verses!.length; i += chunkSize) {
-      final end = (i + chunkSize).clamp(0, _verses!.length);
-      chunks.add(
-        _verses!.sublist(i, end).map((v) => '${v.text} ﴿${v.id}﴾').join(' '),
-      );
-    }
+    // All verses joined as one continuous flowing text — true Mushaf style
+    final allText = _verses!.map((v) => '${v.text} ﴿${v.id}﴾').join('  ');
 
-    return ListView.builder(
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: chunks.length + 1,
-      itemBuilder: (ctx, i) {
-        if (i == 0) {
-          return Padding(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Basmalah / surah header
+          Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Column(
               children: [
@@ -564,12 +558,10 @@ class _SurahContentState extends State<_SurahContent> {
                 ),
               ],
             ),
-          );
-        }
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            chunks[i - 1],
+          ),
+          // One continuous flowing text block
+          Text(
+            allText,
             textDirection: TextDirection.rtl,
             textAlign: TextAlign.justify,
             style: TextStyle(
@@ -579,8 +571,9 @@ class _SurahContentState extends State<_SurahContent> {
               color: cs.onSurface,
             ),
           ),
-        );
-      },
+          const SizedBox(height: 40),
+        ],
+      ),
     );
   }
 }
