@@ -767,6 +767,10 @@ class _HomePageState extends State<HomePage> {
 
                           // Announcements
                           const _HomeAnnouncementsSection(),
+                          const SizedBox(height: 20),
+
+                          // Image slider
+                          const _HomeImageSlider(),
                         ],
                       ),
                     ),
@@ -984,6 +988,248 @@ class _HijriDateChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Home Image Slider ───────────────────────────────────────────────────────
+// Reads from Firestore collection "home_slider" — each doc: { imageUrl, title, order }
+
+class _HomeImageSlider extends StatefulWidget {
+  const _HomeImageSlider();
+
+  @override
+  State<_HomeImageSlider> createState() => _HomeImageSliderState();
+}
+
+class _HomeImageSliderState extends State<_HomeImageSlider> {
+  late final PageController _ctrl;
+  int _current = 0;
+  Timer? _autoTimer;
+  List<Map<String, dynamic>> _slides = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = PageController();
+  }
+
+  @override
+  void dispose() {
+    _autoTimer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _startAuto(int count) {
+    _autoTimer?.cancel();
+    if (count < 2) return;
+    _autoTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_ctrl.hasClients) return;
+      final next = (_current + 1) % count;
+      _ctrl.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('home_slider')
+          .orderBy('order')
+          .snapshots(),
+      builder: (ctx, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 190,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) return const SizedBox.shrink();
+
+        _slides = docs
+            .map((d) => d.data() as Map<String, dynamic>)
+            .toList();
+
+        // Start / restart auto-scroll whenever slide count changes
+        WidgetsBinding.instance.addPostFrameCallback((_) => _startAuto(_slides.length));
+
+        return Column(
+          children: [
+            // Section header
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 4, height: 20,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC9A843),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'معرض الصور',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF1B3D6F),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Slider
+            SizedBox(
+              height: 200,
+              child: PageView.builder(
+                controller: _ctrl,
+                itemCount: _slides.length,
+                onPageChanged: (i) => setState(() => _current = i),
+                itemBuilder: (_, i) {
+                  final slide = _slides[i];
+                  final url   = slide['imageUrl'] as String? ?? '';
+                  final title = slide['title']    as String? ?? '';
+                  return _SlideCard(
+                    imageUrl: url,
+                    title: title,
+                    isActive: i == _current,
+                  );
+                },
+              ),
+            ),
+
+            // Dot indicators
+            if (_slides.length > 1) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_slides.length, (i) {
+                  final active = i == _current;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: active ? 22 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: active
+                          ? const Color(0xFFC9A843)
+                          : cs.onSurface.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SlideCard extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+  final bool isActive;
+
+  const _SlideCard({
+    required this.imageUrl,
+    required this.title,
+    required this.isActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      margin: EdgeInsets.symmetric(
+        horizontal: isActive ? 4 : 10,
+        vertical: isActive ? 0 : 8,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                )
+              ]
+            : null,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Image
+            imageUrl.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      color: const Color(0xFF1B3D6F).withOpacity(0.12),
+                      child: const Center(
+                          child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      color: const Color(0xFF1B3D6F).withOpacity(0.08),
+                      child: const Icon(Icons.image_not_supported_outlined,
+                          size: 40, color: Colors.white38),
+                    ),
+                  )
+                : Container(
+                    color: const Color(0xFF1B3D6F).withOpacity(0.08),
+                    child: const Icon(Icons.image_outlined,
+                        size: 40, color: Colors.white38),
+                  ),
+
+            // Gradient overlay + title
+            if (title.isNotEmpty)
+              Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 24, 14, 12),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.transparent, Colors.black87],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'ScheherazadeNew',
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
