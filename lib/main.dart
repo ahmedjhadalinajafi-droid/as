@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -647,6 +648,14 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
+
+            const SizedBox(height: 20),
+
+            // Latest announcements
+            const _HomeAnnouncementsSection(),
+
+            // Bottom padding for floating nav
+            const SizedBox(height: 100),
           ],
         ),
       ),
@@ -691,6 +700,152 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     }).toList();
+  }
+}
+
+// ─── More Page ────────────────────────────────────────────────────────────────
+
+// ─── Home Announcements Section ──────────────────────────────────────────────
+
+class _HomeAnnouncementsSection extends StatelessWidget {
+  const _HomeAnnouncementsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'آخر الإعلانات',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: cs.primary,
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: AnnouncementsPage(),
+                  ),
+                ),
+              ),
+              child: Text('عرض الكل',
+                  style: TextStyle(color: cs.secondary, fontSize: 13)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('announcements')
+              .orderBy('createdAt', descending: true)
+              .limit(3)
+              .snapshots(),
+          builder: (ctx, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Center(
+                  child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ));
+            }
+            final docs = snap.data?.docs ?? [];
+            if (docs.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'لا توجد إعلانات حالياً',
+                  style:
+                      TextStyle(color: cs.onSurface.withOpacity(0.5)),
+                ),
+              );
+            }
+            return Column(
+              children: docs.map((doc) {
+                final d = doc.data() as Map<String, dynamic>;
+                final title = d['title'] as String? ?? '';
+                final body = d['body'] as String? ?? '';
+                final imageUrl = d['imageUrl'] as String? ?? '';
+                final ts = d['createdAt'] as Timestamp?;
+                final dateStr = ts != null
+                    ? _formatDate(ts.toDate())
+                    : '';
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (imageUrl.isNotEmpty)
+                        CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          height: 160,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            height: 160,
+                            color: cs.primary.withOpacity(0.08),
+                          ),
+                          errorWidget: (_, __, ___) =>
+                              const SizedBox.shrink(),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (title.isNotEmpty)
+                              Text(title,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: cs.primary,
+                                  )),
+                            if (title.isNotEmpty && body.isNotEmpty)
+                              const SizedBox(height: 6),
+                            if (body.isNotEmpty)
+                              Text(body,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 14, height: 1.5)),
+                            if (dateStr.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(dateStr,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: cs.onSurface
+                                          .withOpacity(0.45))),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final months = [
+      'يناير','فبراير','مارس','أبريل','مايو','يونيو',
+      'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'
+    ];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
 }
 

@@ -1,10 +1,18 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+
+// Admin email — only this account can add/delete announcements
+const _adminEmail = 'ahmedjhadalinajafi@gmail.com';
+
+bool get _isAdmin =>
+    FirebaseAuth.instance.currentUser?.email == _adminEmail;
 
 class AnnouncementsPage extends StatelessWidget {
   const AnnouncementsPage({super.key});
@@ -14,18 +22,25 @@ class AnnouncementsPage extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('الإعلانات')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => const _AddAnnouncementPage()),
-        ),
-        icon: const Icon(Icons.add),
-        label: const Text('إعلان جديد'),
-        backgroundColor: cs.primary,
-        foregroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('الإعلانات'),
+        actions: [
+          _AdminLoginButton(),
+        ],
       ),
+      floatingActionButton: _isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const _AddAnnouncementPage()),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('إعلان جديد'),
+              backgroundColor: cs.primary,
+              foregroundColor: Colors.white,
+            )
+          : null,
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('announcements')
@@ -58,7 +73,8 @@ class AnnouncementsPage extends StatelessWidget {
             itemCount: docs.length,
             itemBuilder: (ctx, i) {
               final data = docs[i].data() as Map<String, dynamic>;
-              return _AnnouncementCard(data: data, docId: docs[i].id);
+              return _AnnouncementCard(
+                  data: data, docId: docs[i].id, showDelete: _isAdmin);
             },
           );
         },
@@ -67,10 +83,109 @@ class AnnouncementsPage extends StatelessWidget {
   }
 }
 
+// ─── Admin Login Button ───────────────────────────────────────────────────────
+
+class _AdminLoginButton extends StatefulWidget {
+  @override
+  State<_AdminLoginButton> createState() => _AdminLoginButtonState();
+}
+
+class _AdminLoginButtonState extends State<_AdminLoginButton> {
+  bool _loading = false;
+
+  Future<void> _signIn() async {
+    setState(() => _loading = true);
+    try {
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider();
+        await FirebaseAuth.instance.signInWithPopup(provider);
+      } else {
+        final googleUser = await GoogleSignIn().signIn();
+        if (googleUser == null) return;
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        await FirebaseAuth.instance.signInWithCredential(credential);
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في تسجيل الدخول: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    await FirebaseAuth.instance.signOut();
+    if (!kIsWeb) await GoogleSignIn().signOut();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.all(14),
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+        ),
+      );
+    }
+    if (_isAdmin) {
+      return IconButton(
+        icon: const Icon(Icons.logout, color: Colors.white70),
+        tooltip: 'تسجيل خروج المشرف',
+        onPressed: _signOut,
+      );
+    }
+    return IconButton(
+      icon: const Icon(Icons.admin_panel_settings_outlined, color: Colors.white70),
+      tooltip: 'دخول المشرف',
+      onPressed: _signIn,
+    );
+  }
+}
+
+// ─── Announcement Card ────────────────────────────────────────────────────────
+
 class _AnnouncementCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final String docId;
-  const _AnnouncementCard({required this.data, required this.docId});
+  final bool showDelete;
+  const _AnnouncementCard(
+      {required this.data, required this.docId, required this.showDelete});
+
+  Future<void> _delete(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الإعلان'),
+        content: const Text('هل تريد حذف هذا الإعلان نهائياً؟'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('حذف',
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await FirebaseFirestore.instance
+        .collection('announcements')
+        .doc(docId)
+        .delete();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -133,13 +248,24 @@ class _AnnouncementCard extends StatelessWidget {
                           size: 13,
                           color: cs.onSurface.withOpacity(0.5)),
                       const SizedBox(width: 4),
-                      Text(
-                        dateStr,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurface.withOpacity(0.5),
+                      Expanded(
+                        child: Text(
+                          dateStr,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurface.withOpacity(0.5),
+                          ),
                         ),
                       ),
+                      if (showDelete)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              color: Colors.red, size: 20),
+                          onPressed: () => _delete(context),
+                          tooltip: 'حذف',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                     ],
                   ),
                 ],
@@ -152,7 +278,7 @@ class _AnnouncementCard extends StatelessWidget {
   }
 }
 
-// ─── Add Announcement ────────────────────────────────────────────────────────
+// ─── Add Announcement ─────────────────────────────────────────────────────────
 
 class _AddAnnouncementPage extends StatefulWidget {
   const _AddAnnouncementPage();
@@ -250,7 +376,6 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Image picker
               GestureDetector(
                 onTap: _pickImage,
                 child: Container(
@@ -280,7 +405,6 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
                 ),
               ),
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _title,
                 decoration: InputDecoration(
@@ -293,7 +417,6 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
                     : null,
               ),
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _body,
                 maxLines: 5,
@@ -308,7 +431,6 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
                     : null,
               ),
               const SizedBox(height: 24),
-
               ElevatedButton.icon(
                 onPressed: _uploading ? null : _submit,
                 icon: _uploading
