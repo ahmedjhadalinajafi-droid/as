@@ -92,6 +92,7 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
     _todayH = HijriCalendar.now();
     _viewYear = _todayG.year;
     _viewMonth = _todayG.month;
+    _selectedGregDay = _todayG.day;
   }
 
   void _prev() => setState(() {
@@ -124,25 +125,12 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
       .where((o) => o.month == h.hMonth && o.day == h.hDay)
       .toList();
 
-  // Collect all unique Hijri months visible this Gregorian month
   List<int> get _visibleHijriMonths {
     final seen = <int>{};
     for (int d = 1; d <= _daysInMonth; d++) {
       seen.add(_hijriFor(d).hMonth);
     }
     return seen.toList()..sort();
-  }
-
-  List<_Occasion> _occasionsInMonth() {
-    final months = _visibleHijriMonths;
-    return _islamicOccasions
-        .where((o) => months.contains(o.month))
-        .toList()
-      ..sort((a, b) {
-        final ai = months.indexOf(a.month) * 100 + a.day;
-        final bi = months.indexOf(b.month) * 100 + b.day;
-        return ai.compareTo(bi);
-      });
   }
 
   @override
@@ -191,7 +179,6 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                   Expanded(
                     child: Column(
                       children: [
-                        // Gregorian month (large)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -227,7 +214,6 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        // Hijri months
                         Text(
                           hijriMonths,
                           style: TextStyle(
@@ -245,6 +231,119 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                   ),
                 ],
               ),
+            ),
+
+            // ── Selected day info — shown at TOP ─────────────────────
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: _selectedGregDay != null && selectedH != null
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: navy.withOpacity(0.07),
+                        border: Border(
+                          bottom: BorderSide(color: gold.withOpacity(0.4), width: 1.5),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Dual date row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Hijri date
+                              Column(
+                                children: [
+                                  Text(
+                                    '${selectedH.hDay}',
+                                    style: const TextStyle(
+                                      fontSize: 36,
+                                      fontWeight: FontWeight.bold,
+                                      color: navy,
+                                      height: 1,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_hijriMonthNames[selectedH.hMonth - 1]} ${selectedH.hYear} هـ',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: navy,
+                                      fontFamily: 'ScheherazadeNew',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                width: 1,
+                                height: 48,
+                                margin: const EdgeInsets.symmetric(horizontal: 20),
+                                color: gold.withOpacity(0.5),
+                              ),
+                              // Gregorian date
+                              Column(
+                                children: [
+                                  Text(
+                                    '$_selectedGregDay',
+                                    style: TextStyle(
+                                      fontSize: 36,
+                                      fontWeight: FontWeight.bold,
+                                      color: cs.onSurface,
+                                      height: 1,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_gregMonthNames[_viewMonth - 1]} $_viewYear م',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: cs.onSurface.withOpacity(0.6),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          // Occasions for selected day
+                          if (selectedOccasions.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            ...selectedOccasions.map((o) => Container(
+                                  margin: const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: o.color.withOpacity(0.09),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: o.color.withOpacity(0.35)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 10, height: 10,
+                                        decoration: BoxDecoration(
+                                            color: o.color, shape: BoxShape.circle),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          o.name,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: o.color,
+                                            fontFamily: 'ScheherazadeNew',
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )),
+                          ],
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
 
             // ── Weekday headers ──────────────────────────────────────
@@ -268,14 +367,14 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
               ),
             ),
 
-            // ── Day grid ─────────────────────────────────────────────
+            // ── Day grid — circle cells ───────────────────────────────
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 7,
-                childAspectRatio: 0.85,
+                childAspectRatio: 1.0,
               ),
               itemCount: firstWd + daysInMonth,
               itemBuilder: (_, i) {
@@ -293,74 +392,70 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                   onTap: () => setState(() =>
                       _selectedGregDay = isSelected ? null : gregDay),
                   child: Container(
-                    margin: const EdgeInsets.all(2),
+                    margin: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
+                      shape: BoxShape.circle,
                       color: isSelected
                           ? navy
                           : isToday
-                              ? gold.withOpacity(0.15)
+                              ? gold.withOpacity(0.18)
                               : null,
-                      borderRadius: BorderRadius.circular(8),
                       border: isToday && !isSelected
-                          ? Border.all(color: gold, width: 1.5)
-                          : null,
+                          ? Border.all(color: gold, width: 1.8)
+                          : isSelected
+                              ? null
+                              : hasOccasion
+                                  ? Border.all(
+                                      color: occasions.first.color.withOpacity(0.35),
+                                      width: 1,
+                                    )
+                                  : null,
                     ),
-                    child: Stack(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Hijri date — small, top-right corner
-                        Positioned(
-                          top: 2,
-                          right: 3,
-                          child: Text(
-                            '${hDate.hDay}',
-                            style: TextStyle(
-                              fontSize: 9,
+                        // Hijri date — bigger
+                        Text(
+                          '${hDate.hDay}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.1,
+                            color: isSelected
+                                ? Colors.white60
+                                : hasOccasion
+                                    ? occasions.first.color.withOpacity(0.9)
+                                    : cs.onSurface.withOpacity(0.45),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        // Gregorian date
+                        Text(
+                          '$gregDay',
+                          style: TextStyle(
+                            fontSize: 17,
+                            height: 1.1,
+                            fontWeight: isToday || isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSelected
+                                ? Colors.white
+                                : isToday
+                                    ? gold
+                                    : cs.onSurface,
+                          ),
+                        ),
+                        if (hasOccasion)
+                          Container(
+                            width: 4,
+                            height: 4,
+                            margin: const EdgeInsets.only(top: 1),
+                            decoration: BoxDecoration(
                               color: isSelected
-                                  ? Colors.white60
-                                  : hasOccasion
-                                      ? occasions.first.color.withOpacity(0.9)
-                                      : cs.onSurface.withOpacity(0.4),
-                              fontWeight: FontWeight.bold,
+                                  ? Colors.white70
+                                  : occasions.first.color,
+                              shape: BoxShape.circle,
                             ),
                           ),
-                        ),
-                        // Gregorian date — large, centered/bottom
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '$gregDay',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: isToday || isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : isToday
-                                            ? gold
-                                            : cs.onSurface,
-                                  ),
-                                ),
-                                if (hasOccasion)
-                                  Container(
-                                    width: 5,
-                                    height: 5,
-                                    margin: const EdgeInsets.only(top: 2),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? Colors.white70
-                                          : occasions.first.color,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -370,67 +465,12 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
 
             const Divider(height: 1),
 
-            // ── Selected day info ────────────────────────────────────
-            if (_selectedGregDay != null && selectedH != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                color: navy.withOpacity(0.05),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today, size: 16, color: navy),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$_selectedGregDay ${_gregMonthNames[_viewMonth - 1]} $_viewYear م',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: navy),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${selectedH.hDay} ${_hijriMonthNames[selectedH.hMonth - 1]} ${selectedH.hYear} هـ',
-                      style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.6)),
-                    ),
-                  ],
-                ),
-              ),
-              if (selectedOccasions.isNotEmpty)
-                ...selectedOccasions.map((o) => Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: o.color.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: o.color.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10, height: 10,
-                            decoration: BoxDecoration(color: o.color, shape: BoxShape.circle),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              o.name,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: o.color,
-                                fontFamily: 'ScheherazadeNew',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )),
-              const Divider(),
-            ],
-
             // ── Month occasions list ──────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Group by Hijri month
                   ..._visibleHijriMonths.map((hm) {
                     final monthOccasions = _islamicOccasions
                         .where((o) => o.month == hm)
@@ -444,14 +484,14 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                           padding: const EdgeInsets.only(bottom: 8, top: 4),
                           child: Row(
                             children: [
-                              const Icon(Icons.mosque, size: 16, color: navy),
+                              const Icon(Icons.mosque, size: 16, color: Color(0xFF1B3D6F)),
                               const SizedBox(width: 6),
                               Text(
                                 'مناسبات شهر ${_hijriMonthNames[hm - 1]}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15,
-                                  color: navy,
+                                  color: Color(0xFF1B3D6F),
                                 ),
                               ),
                             ],
