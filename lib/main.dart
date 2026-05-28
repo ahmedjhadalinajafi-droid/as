@@ -162,8 +162,7 @@ class MasjidApp extends StatelessWidget {
           ),
         ),
       ),
-      scaffoldBackgroundColor:
-          isDark ? const Color(0xFF0A1628) : const Color(0xFFF4F6FA),
+      scaffoldBackgroundColor: Colors.transparent,
       dividerColor: navy.withOpacity(0.12),
     );
   }
@@ -190,14 +189,30 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final overlayColor =
+        (isDark ? const Color(0xFF0A1628) : Colors.white).withOpacity(0.87);
+
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        extendBody: true,
-        body: IndexedStack(index: _currentIndex, children: _pages),
-        bottomNavigationBar: _FloatingNavBar(
-          currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0A1628) : const Color(0xFFF4F6FA),
+          image: DecorationImage(
+            image: const AssetImage('assets/images/logo.png'),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(overlayColor, BlendMode.srcOver),
+            onError: (_, __) {},
+          ),
+        ),
+        child: Scaffold(
+          extendBody: true,
+          backgroundColor: Colors.transparent,
+          body: IndexedStack(index: _currentIndex, children: _pages),
+          bottomNavigationBar: _FloatingNavBar(
+            currentIndex: _currentIndex,
+            onTap: (i) => setState(() => _currentIndex = i),
+          ),
         ),
       ),
     );
