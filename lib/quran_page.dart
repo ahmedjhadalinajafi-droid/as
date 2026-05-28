@@ -459,7 +459,6 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
           Expanded(
             child: PageView.builder(
               controller: _pageController,
-              reverse: true,
               itemCount: widget.surahs.length,
               onPageChanged: (i) {
                 _stopAudio();
@@ -516,9 +515,19 @@ class _SurahContentState extends State<_SurahContent> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // Group verses into 30-verse flowing chunks (Mushaf paragraph style)
+    const chunkSize = 30;
+    final chunks = <String>[];
+    for (int i = 0; i < _verses!.length; i += chunkSize) {
+      final end = (i + chunkSize).clamp(0, _verses!.length);
+      chunks.add(
+        _verses!.sublist(i, end).map((v) => '${v.text} ﴿${v.id}﴾').join(' '),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: _verses!.length + 1,
+      itemCount: chunks.length + 1,
       itemBuilder: (ctx, i) {
         if (i == 0) {
           return Padding(
@@ -557,11 +566,10 @@ class _SurahContentState extends State<_SurahContent> {
             ),
           );
         }
-        final v = _verses![i - 1];
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            '${v.text} ﴿${v.id}﴾',
+            chunks[i - 1],
             textDirection: TextDirection.rtl,
             textAlign: TextAlign.justify,
             style: TextStyle(

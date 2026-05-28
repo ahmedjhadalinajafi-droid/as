@@ -511,11 +511,28 @@ class _HomePageState extends State<HomePage> {
   String _nextPrayer = '';
   String _nextPrayerTime = '';
   bool _loading = true;
+  late final PageController _prayerPageController;
+  int _prayerPageIndex = 0;
+
+  static const _prayers = [
+    ('fajr',    'الفجر',  Icons.brightness_3),
+    ('dhuhr',   'الظهر',  Icons.wb_sunny),
+    ('asr',     'العصر',  Icons.brightness_5),
+    ('maghrib', 'المغرب', Icons.brightness_4),
+    ('isha',    'العشاء', Icons.nights_stay),
+  ];
 
   @override
   void initState() {
     super.initState();
+    _prayerPageController = PageController(viewportFraction: 0.82);
     _loadPrayerTimes();
+  }
+
+  @override
+  void dispose() {
+    _prayerPageController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPrayerTimes() async {
@@ -582,18 +599,26 @@ class _HomePageState extends State<HomePage> {
       final m = int.tryParse(parts[1]) ?? 0;
       if (h > now.hour || (h == now.hour && m > now.minute)) {
         if (!mounted) return;
+        final idx = order.indexOf(key);
         setState(() {
           _nextPrayer = names[key] ?? key;
           _nextPrayerTime = t;
+          _prayerPageIndex = idx;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _prayerPageController.hasClients) {
+            _prayerPageController.jumpToPage(idx);
+          }
         });
         return;
       }
     }
-    // After isha — next is fajr
+    // After isha — next is fajr (index 0)
     if (!mounted) return;
     setState(() {
       _nextPrayer = 'الفجر';
       _nextPrayerTime = times['fajr'] ?? '';
+      _prayerPageIndex = 0;
     });
   }
 
@@ -699,71 +724,16 @@ class _HomePageState extends State<HomePage> {
             const _DualDateBanner(),
             const SizedBox(height: 16),
 
-            // Next prayer card
-            if (_nextPrayer.isNotEmpty)
-              Card(
-                color: const Color(0xFF1B3D6F).withOpacity(0.55),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(color: Color(0xFFC9A843), width: 1)),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'الصلاة القادمة',
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _nextPrayer,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        _nextPrayerTime,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 16),
-
-            // Today's prayer times
+            // Prayer times carousel
             if (_loading)
-              const Center(child: CircularProgressIndicator())
-            else
-              Card(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+              const Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'أوقات الصلاة اليوم',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: cs.primary,
-                        ),
-                      ),
-                      const Divider(),
-                      ..._buildPrayerRows(),
-                    ],
-                  ),
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
                 ),
-              ),
+              )
+            else
+              _buildPrayerCarousel(cs),
 
             const SizedBox(height: 20),
 
@@ -778,44 +748,131 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  List<Widget> _buildPrayerRows() {
-    const prayers = [
-      ('fajr', 'الفجر', Icons.brightness_3),
-      ('dhuhr', 'الظهر', Icons.wb_sunny),
-      ('asr', 'العصر', Icons.brightness_5),
-      ('maghrib', 'المغرب', Icons.brightness_4),
-      ('isha', 'العشاء', Icons.nights_stay),
-    ];
+  Widget _buildPrayerCarousel(ColorScheme cs) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 160,
+          child: PageView.builder(
+            controller: _prayerPageController,
+            itemCount: _prayers.length,
+            onPageChanged: (i) => setState(() => _prayerPageIndex = i),
+            itemBuilder: (ctx, i) {
+              final key  = _prayers[i].$1;
+              final name = _prayers[i].$2;
+              final icon = _prayers[i].$3;
+              final time = _todayPrayers[key] ?? '--:--';
+              return _PrayerCard(
+                name: name,
+                time: time,
+                icon: icon,
+                isNext: name == _nextPrayer,
+                cs: cs,
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(_prayers.length, (i) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: i == _prayerPageIndex ? 20 : 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: i == _prayerPageIndex
+                    ? cs.primary
+                    : cs.primary.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+}
 
-    return prayers.map((p) {
-      final time = _todayPrayers[p.$1] ?? '--:--';
-      final isNext = p.$2 == _nextPrayer;
-      return ListTile(
-        dense: true,
-        leading: Icon(
-          p.$3,
-          color: isNext
-              ? Theme.of(context).colorScheme.primary
-              : Colors.grey,
-        ),
-        title: Text(
-          p.$2,
-          style: TextStyle(
-            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
-            color: isNext ? Theme.of(context).colorScheme.primary : null,
+// ─── Prayer Card ─────────────────────────────────────────────────────────────
+
+class _PrayerCard extends StatelessWidget {
+  final String name;
+  final String time;
+  final IconData icon;
+  final bool isNext;
+  final ColorScheme cs;
+  const _PrayerCard({
+    required this.name,
+    required this.time,
+    required this.icon,
+    required this.isNext,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const navy = Color(0xFF1B3D6F);
+    const gold = Color(0xFFC9A843);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isNext ? navy : cs.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isNext ? gold : cs.outline.withOpacity(0.3),
+            width: isNext ? 1.5 : 0.8,
           ),
+          boxShadow: isNext
+              ? [
+                  BoxShadow(
+                    color: navy.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : null,
         ),
-        trailing: Text(
-          time,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
-            color: isNext ? Theme.of(context).colorScheme.primary : null,
-            letterSpacing: 1.5,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 26, color: isNext ? gold : cs.primary),
+            const SizedBox(height: 6),
+            Text(
+              name,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isNext ? Colors.white : cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              time,
+              style: TextStyle(
+                fontSize: 22,
+                letterSpacing: 2,
+                fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
+                color: isNext ? Colors.white : cs.onSurface,
+              ),
+            ),
+            if (isNext)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Text(
+                  'الصلاة القادمة',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withOpacity(0.65),
+                  ),
+                ),
+              ),
+          ],
         ),
-      );
-    }).toList();
+      ),
+    );
   }
 }
 
