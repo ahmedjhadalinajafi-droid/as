@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SocialMediaPage extends StatelessWidget {
   const SocialMediaPage({super.key});
@@ -254,7 +255,17 @@ class _PlatformCard extends StatelessWidget {
 
   const _PlatformCard({required this.platform, required this.isDark});
 
-  void _copyHandle(BuildContext context) {
+  Future<void> _open(BuildContext context) async {
+    final uri = Uri.tryParse(platform.url);
+    if (uri != null) {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launched) return;
+    }
+    // Fallback — copy handle to clipboard
+    if (!context.mounted) return;
     Clipboard.setData(ClipboardData(text: platform.handle));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -292,7 +303,7 @@ class _PlatformCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () => _copyHandle(context),
+          onTap: () => _open(context),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -364,7 +375,7 @@ class _PlatformCard extends StatelessWidget {
 
                 // Follow button
                 GestureDetector(
-                  onTap: () => _copyHandle(context),
+                  onTap: () => _open(context),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 8),

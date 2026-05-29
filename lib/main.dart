@@ -210,6 +210,7 @@ class _MainShellState extends State<MainShell> {
     HomePage.new,
     QuranPage.new,
     PrayerTimesPage.new,
+    SocialMediaPage.new,
     MorePage.new,
   ];
 
@@ -358,6 +359,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
     _NavItem(icon: Icons.home_outlined,       selectedIcon: Icons.home_rounded,         label: 'الرئيسية'),
     _NavItem(icon: Icons.menu_book_outlined,  selectedIcon: Icons.menu_book_rounded,    label: 'القرآن'),
     _NavItem(icon: Icons.access_time_outlined,selectedIcon: Icons.access_time_filled,   label: 'الصلاة'),
+    _NavItem(icon: Icons.people_outline,      selectedIcon: Icons.people_rounded,       label: 'تواصل'),
     _NavItem(icon: Icons.grid_view_outlined,  selectedIcon: Icons.grid_view_rounded,    label: 'المزيد'),
   ];
 
