@@ -1,0 +1,17 @@
+{
+  "name": "masjid-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "بوت واتساب للمسجد باستخدام Baileys و Gemini AI",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.9",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
