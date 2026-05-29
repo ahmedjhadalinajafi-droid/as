@@ -104,13 +104,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "url": "={{ $vars.BAILEYS_SERVER_URL }}/send",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $vars.EVOLUTION_API_KEY }}"
+              "name": "x-secret",
+              "value": "={{ $vars.SERVER_SECRET }}"
             },
             {
               "name": "Content-Type",
@@ -132,13 +132,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "url": "={{ $vars.BAILEYS_SERVER_URL }}/send",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $vars.EVOLUTION_API_KEY }}"
+              "name": "x-secret",
+              "value": "={{ $vars.SERVER_SECRET }}"
             },
             {
               "name": "Content-Type",
@@ -148,7 +148,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"number\": \"{{ $('Extract Message Data').item.json.phone }}\",\n  \"text\": \"عذراً، حدث خطأ تقني. يرجى إعادة المحاولة أو الاتصال بالمسجد مباشرة.\"\n}",
+        "jsonBody": "={\n  \"number\": \"{{ $('Extract Message Data').item.json.phone }}\",\n  \"text\": \"عذراً، حدث خطأ تقني. يرجى المحاولة مرة أخرى أو التواصل مع المسجد مباشرة.\"\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0007-0007-0007-a1b2c3d40007",

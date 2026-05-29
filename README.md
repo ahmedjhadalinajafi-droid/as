@@ -2,10 +2,16 @@
 
 بوت ذكاء اصطناعي يجيب على أسئلة المصلين والزوار عبر واتساب تلقائياً باللغة العربية.
 
-## كيف يعمل
+## المعمارية
 
 ```
-رسالة واتساب ← Baileys ← bot.js ← Gemini AI ← رد تلقائي
+واتساب
+  ↕
+whatsapp-server.js  (Baileys - Node.js)
+  ↕  webhook + /send
+n8n workflow
+  ↕
+Gemini AI (مجاني)
 ```
 
 ---
@@ -13,18 +19,18 @@
 ## المتطلبات
 
 - **Node.js 18+**
+- **n8n** (مثبّت محلياً أو على سيرفر)
 - **مفتاح Gemini مجاني** من aistudio.google.com
 
 ---
 
-## خطوات التشغيل
+## خطوات الإعداد
 
 ### 1. احصل على مفتاح Gemini المجاني
 
 1. اذهب إلى [aistudio.google.com](https://aistudio.google.com)
 2. سجّل دخول بحساب Google
 3. اضغط **Get API Key** ثم **Create API Key**
-4. انسخ المفتاح
 
 ### 2. أضف معلومات المسجد
 
@@ -36,10 +42,13 @@
 cp .env.example .env
 ```
 
-ثم افتح `.env` وضع مفتاح Gemini:
+عدّل `.env` وأضف المفاتيح:
 
-```
-GEMINI_API_KEY=AIza...مفتاحك_هنا
+```env
+GEMINI_API_KEY=AIza...مفتاحك
+N8N_WEBHOOK_URL=http://localhost:5678/webhook/masjid-whatsapp
+SERVER_SECRET=اختر_كلمة_سر
+PORT=3000
 ```
 
 ### 4. ثبّت المكتبات
@@ -48,23 +57,37 @@ GEMINI_API_KEY=AIza...مفتاحك_هنا
 npm install
 ```
 
-### 5. شغّل البوت
+### 5. استورد الـ workflow في n8n
+
+1. افتح n8n
+2. اضغط **+ New Workflow** ← قائمة (⋮) ← **Import from File**
+3. اختر ملف `masjid_bot_workflow.json`
+
+### 6. أضف المتغيرات في n8n
+
+في n8n ← **Settings → Variables**:
+
+| المتغير | القيمة |
+|---|---|
+| `GEMINI_API_KEY` | مفتاح Gemini |
+| `BAILEYS_SERVER_URL` | `http://localhost:3000` |
+| `SERVER_SECRET` | نفس الكلمة في `.env` |
+| `MOSQUE_SYSTEM_PROMPT` | انسخ محتوى `mosque_info.txt` كاملاً |
+
+### 7. فعّل الـ workflow في n8n
+
+اضغط **Active** في الـ workflow.
+
+### 8. شغّل سيرفر Baileys
 
 ```bash
 npm start
 ```
 
-سيظهر **QR Code** في التيرمنال — افتح واتساب في هاتفك وامسح الكود:
+سيظهر **QR Code** — افتح واتساب ← الأجهزة المرتبطة ← امسح الكود.
 
 ```
-واتساب → النقاط الثلاث → الأجهزة المرتبطة → ربط جهاز
-```
-
-### 6. البوت جاهز!
-
-بعد المسح سترى:
-```
-✅ البوت متصل بواتساب وجاهز لاستقبال الأسئلة!
+✅ واتساب متصل وجاهز!
 ```
 
 ---
@@ -73,10 +96,10 @@ npm start
 
 | الملف | الوصف |
 |---|---|
-| `bot.js` | كود البوت الرئيسي |
+| `whatsapp-server.js` | سيرفر Baileys — يستقبل رسائل واتساب ويرسلها لـ n8n |
+| `masjid_bot_workflow.json` | workflow n8n جاهز للاستيراد |
 | `mosque_info.txt` | معلومات المسجد للذكاء الاصطناعي |
-| `.env` | مفتاح Gemini (لا ترفعه على GitHub) |
-| `auth_info/` | جلسة واتساب (تُنشأ تلقائياً) |
+| `bot.js` | نسخة مستقلة بدون n8n (اختياري) |
 
 ---
 
@@ -89,8 +112,12 @@ npm start
 
 ---
 
-## ملاحظات
+## استكشاف الأخطاء
 
-- **إعادة التشغيل:** الجلسة محفوظة في `auth_info/` — لا تحتاج لمسح QR مرة أخرى
-- **تسجيل الخروج:** احذف مجلد `auth_info/` وأعد التشغيل
-- **تحديث معلومات المسجد:** عدّل `mosque_info.txt` وأعد تشغيل البوت
+**البوت لا يرد؟**
+- تأكد أن سيرفر Baileys يعمل: `curl http://localhost:3000/status`
+- تأكد أن الـ workflow في n8n مفعّل
+- راجع **Executions** في n8n
+
+**خطأ في الاتصال بواتساب؟**
+- احذف مجلد `auth_info/` وأعد التشغيل لمسح QR جديد
