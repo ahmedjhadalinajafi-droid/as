@@ -66,13 +66,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "=Bearer {{ $vars.OPENAI_API_KEY }}"
+              "name": "x-goog-api-key",
+              "value": "={{ $vars.GEMINI_API_KEY }}"
             },
             {
               "name": "Content-Type",
@@ -82,18 +82,18 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": {{ JSON.stringify($vars.MOSQUE_SYSTEM_PROMPT) }}\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.senderName + ' يسأل: ' + $json.text) }}\n    }\n  ],\n  \"max_tokens\": 600,\n  \"temperature\": 0.7,\n  \"response_format\": { \"type\": \"text\" }\n}",
+        "jsonBody": "={\n  \"system_instruction\": {\n    \"parts\": [{ \"text\": {{ JSON.stringify($vars.MOSQUE_SYSTEM_PROMPT) }} }]\n  },\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [{ \"text\": {{ JSON.stringify($json.senderName + ' يسأل: ' + $json.text) }} }]\n    }\n  ],\n  \"generationConfig\": {\n    \"maxOutputTokens\": 600,\n    \"temperature\": 0.7\n  }\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0004-0004-0004-a1b2c3d40004",
-      "name": "Ask AI (GPT-4o-mini)",
+      "name": "Ask AI (Gemini)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [900, 300]
     },
     {
       "parameters": {
-        "jsCode": "const aiResponse = $input.first().json;\nconst aiText = aiResponse.choices[0].message.content;\n\n// Retrieve phone from the earlier extract node\nconst phone = $('Extract Message Data').item.json.phone;\n\nreturn [{\n  json: {\n    phone,\n    aiText\n  }\n}];"
+        "jsCode": "const aiResponse = $input.first().json;\nconst aiText = aiResponse.candidates[0].content.parts[0].text;\n\n// Retrieve phone from the earlier extract node\nconst phone = $('Extract Message Data').item.json.phone;\n\nreturn [{\n  json: {\n    phone,\n    aiText\n  }\n}];"
       },
       "id": "a1b2c3d4-0005-0005-0005-a1b2c3d40005",
       "name": "Prepare Reply",
@@ -186,14 +186,14 @@
       "main": [
         [
           {
-            "node": "Ask AI (GPT-4o-mini)",
+            "node": "Ask AI (Gemini)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Ask AI (GPT-4o-mini)": {
+    "Ask AI (Gemini)": {
       "main": [
         [
           {

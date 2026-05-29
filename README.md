@@ -20,7 +20,7 @@
 
 - **n8n** (مثبّت على سيرفر أو cloud)
 - **Evolution API** (لتوصيل واتساب)
-- **OpenAI API Key** (للذكاء الاصطناعي - GPT-4o-mini رخيص جداً)
+- **Google Gemini API Key** (مجاني للتجربة - 1500 طلب/يوم)
 
 ---
 
@@ -34,26 +34,33 @@
 - الأنشطة والخدمات
 - معلومات التواصل
 
-### 2. إضافة المتغيرات في n8n
+### 2. الحصول على مفتاح Gemini المجاني
+
+1. اذهب إلى [aistudio.google.com](https://aistudio.google.com)
+2. سجّل دخول بحساب Google
+3. اضغط **Get API Key** ثم **Create API Key**
+4. انسخ المفتاح
+
+### 3. إضافة المتغيرات في n8n
 
 في n8n اذهب إلى **Settings → Variables** وأضف هذه المتغيرات:
 
 | اسم المتغير | القيمة |
 |---|---|
-| `OPENAI_API_KEY` | مفتاح OpenAI API الخاص بك |
+| `GEMINI_API_KEY` | مفتاح Gemini المجاني من AI Studio |
 | `EVOLUTION_API_URL` | رابط سيرفر Evolution API (مثال: `http://localhost:8080`) |
 | `EVOLUTION_INSTANCE` | اسم instance الواتساب في Evolution API |
 | `EVOLUTION_API_KEY` | مفتاح Evolution API |
 | `MOSQUE_SYSTEM_PROMPT` | انسخ المحتوى الكامل من ملف `mosque_info.txt` بعد تعديله |
 
-### 3. استيراد الـ Workflow
+### 4. استيراد الـ Workflow
 
 1. افتح n8n
 2. اضغط **+ New Workflow**
 3. اضغط على القائمة (⋮) ثم **Import from File**
 4. اختر ملف `masjid_bot_workflow.json`
 
-### 4. ربط Evolution API بـ n8n
+### 5. ربط Evolution API بـ n8n
 
 في Evolution API أضف webhook يشير إلى:
 ```
@@ -62,7 +69,7 @@ https://YOUR_N8N_URL/webhook/masjid-whatsapp
 
 الأحداث المطلوبة: `messages.upsert`
 
-### 5. تفعيل البوت
+### 6. تفعيل البوت
 
 في n8n فعّل الـ workflow بالضغط على **Active**
 
@@ -77,10 +84,14 @@ https://YOUR_N8N_URL/webhook/masjid-whatsapp
 
 ---
 
-## التكلفة التقديرية
+## التكلفة
 
-- **GPT-4o-mini**: ~$0.15 لكل مليون كلمة مدخلة — رخيص جداً
-- مثال: 1000 سؤال في الشهر ≈ أقل من $1
+| الحد | التفاصيل |
+|---|---|
+| **مجاني** | 1,500 طلب/يوم — كافٍ للاختبار وللمساجد الصغيرة |
+| **مدفوع** | ~$0.10 لكل مليون حرف — رخيص جداً للاستخدام الكبير |
+
+> للترقية إلى مدفوع: فعّل Billing في Google Cloud ونفس المفتاح يستمر بالعمل.
 
 ---
 
