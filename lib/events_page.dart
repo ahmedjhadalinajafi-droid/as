@@ -72,26 +72,37 @@ class _EventList extends StatelessWidget {
   final bool upcoming;
   const _EventList({required this.upcoming});
 
+  Stream<QuerySnapshot>? _buildStream() {
+    try {
+      final now = Timestamp.now();
+      Query query = FirebaseFirestore.instance
+          .collection('events')
+          .orderBy('date', descending: !upcoming);
+      if (upcoming) {
+        query = query.where('date', isGreaterThanOrEqualTo: now);
+      } else {
+        query = query.where('date', isLessThan: now);
+      }
+      return query.snapshots();
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final now = Timestamp.now();
+    final stream = _buildStream();
 
-    Query query = FirebaseFirestore.instance
-        .collection('events')
-        .orderBy('date', descending: !upcoming);
-
-    if (upcoming) {
-      query = query.where('date', isGreaterThanOrEqualTo: now);
-    } else {
-      query = query.where('date', isLessThan: now);
+    if (stream == null) {
+      return _FirebaseErrorView(cs: cs);
     }
 
     return StreamBuilder<QuerySnapshot>(
-      stream: query.snapshots(),
+      stream: stream,
       builder: (ctx, snap) {
         if (snap.hasError) {
-          return Center(child: Text('خطأ: ${snap.error}'));
+          return _FirebaseErrorView(cs: cs);
         }
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -361,6 +372,47 @@ class _EventCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Firebase Error View ──────────────────────────────────────────────────────
+
+class _FirebaseErrorView extends StatelessWidget {
+  final ColorScheme cs;
+  const _FirebaseErrorView({required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cloud_off_rounded,
+                size: 64, color: cs.primary.withOpacity(0.3)),
+            const SizedBox(height: 16),
+            Text(
+              'تعذّر الاتصال بالخادم',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface.withOpacity(0.6),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'يرجى التحقق من اتصالك بالإنترنت والمحاولة مجدداً',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: cs.onSurface.withOpacity(0.4),
               ),
             ),
           ],
