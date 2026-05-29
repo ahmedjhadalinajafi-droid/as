@@ -82,7 +82,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": {{ JSON.stringify($vars.MOSQUE_SYSTEM_PROMPT) }}\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.senderName + ' يسأل: ' + $json.text) }}\n    }\n  ],\n  \"max_tokens\": 600,\n  \"temperature\": 0.7\n}",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": {{ JSON.stringify($vars.MOSQUE_SYSTEM_PROMPT) }}\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.senderName + ' يسأل: ' + $json.text) }}\n    }\n  ],\n  \"max_tokens\": 600,\n  \"temperature\": 0.7,\n  \"response_format\": { \"type\": \"text\" }\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0004-0004-0004-a1b2c3d40004",
