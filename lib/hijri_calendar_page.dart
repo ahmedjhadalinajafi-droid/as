@@ -485,7 +485,12 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                           padding: const EdgeInsets.only(bottom: 8, top: 4),
                           child: Row(
                             children: [
-                              const Icon(Icons.mosque, size: 16, color: Color(0xFF1B3D6F)),
+                              Image.asset(
+                                'assets/images/logo.png',
+                                height: 18,
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.mosque, size: 16, color: Color(0xFF1B3D6F)),
+                              ),
                               const SizedBox(width: 6),
                               Text(
                                 'مناسبات شهر ${_hijriMonthNames[hm - 1]}',

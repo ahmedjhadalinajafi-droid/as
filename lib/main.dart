@@ -731,7 +731,12 @@ class _HomePageState extends State<HomePage> {
                           fontFamily: 'ScheherazadeNew',
                         ),
                       ),
-                      const Icon(Icons.mosque, color: _gold, size: 26),
+                      Image.asset(
+                        'assets/images/logo.png',
+                        height: 32,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.mosque, color: _gold, size: 26),
+                      ),
                     ],
                   ),
                 ),

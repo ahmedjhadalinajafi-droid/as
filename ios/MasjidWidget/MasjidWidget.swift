@@ -156,10 +156,11 @@ struct SmallView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 5) {
-                // Mosque icon + name
-                Image(systemName: "building.columns.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(kGold)
+                // Mosque logo + name
+                Image("logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 32, height: 32)
 
                 Text("مسجد أهل البيت ع")
                     .font(.system(size: 9, weight: .bold))
@@ -204,9 +205,10 @@ struct MediumView: View {
                 // Header row
                 HStack {
                     HStack(spacing: 5) {
-                        Image(systemName: "building.columns.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(kGold)
+                        Image("logo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
                         Text("مسجد أهل البيت ع")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.white)
@@ -264,9 +266,10 @@ struct LargeView: View {
             VStack(spacing: 0) {
                 // ── Header ──────────────────────────────────
                 VStack(spacing: 4) {
-                    Image(systemName: "building.columns.fill")
-                        .font(.system(size: 32))
-                        .foregroundColor(kGold)
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 48, height: 48)
                         .padding(.top, 4)
 
                     Text("مسجد وحسينية أهل البيت ع")

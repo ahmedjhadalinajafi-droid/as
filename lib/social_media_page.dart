@@ -133,8 +133,12 @@ class SocialMediaPage extends StatelessWidget {
                             border: Border.all(
                                 color: _gold.withOpacity(0.5), width: 1.5),
                           ),
-                          child:
-                              const Icon(Icons.mosque, size: 36, color: _gold),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            height: 44,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.mosque, size: 36, color: _gold),
+                          ),
                         ),
                         const SizedBox(height: 10),
                         const Text(
