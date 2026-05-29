@@ -57,6 +57,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar', null);
 
+  // Set App Group ID at startup so home_widget works on iOS
+  if (!kIsWeb) {
+    try {
+      await HomeWidget.setAppGroupId('group.com.ahmed.najafi.masjid');
+    } catch (_) {}
+  }
+
   try {
     if (kIsWeb) {
       await Firebase.initializeApp(
