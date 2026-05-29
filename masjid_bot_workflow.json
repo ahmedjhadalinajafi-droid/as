@@ -1,0 +1,227 @@
+{
+  "name": "Masjid WhatsApp Bot - Evolution API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "masjid-whatsapp",
+        "responseMode": "immediateResponse",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-a1b2c3d40001",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "masjid-whatsapp"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-event",
+              "leftValue": "={{ $json.event }}",
+              "rightValue": "messages.upsert",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "check-from-me",
+              "leftValue": "={{ $json.data.key.fromMe }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-0002-0002-a1b2c3d40002",
+      "name": "Is Incoming Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst messageData = data.data;\n\n// Extract sender JID and phone number\nconst remoteJid = messageData.key.remoteJid;\nconst isGroup = remoteJid.includes('@g.us');\nconst phone = remoteJid.split('@')[0];\n\n// Extract message text from all common message types\nconst msg = messageData.message || {};\nlet text = '';\n\nif (msg.conversation) {\n  text = msg.conversation;\n} else if (msg.extendedTextMessage?.text) {\n  text = msg.extendedTextMessage.text;\n} else if (msg.imageMessage?.caption) {\n  text = msg.imageMessage.caption;\n} else if (msg.videoMessage?.caption) {\n  text = msg.videoMessage.caption;\n}\n\n// Skip if no text content\nif (!text.trim()) {\n  return [];\n}\n\nconst senderName = messageData.pushName || 'الزائر الكريم';\n\nreturn [{\n  json: {\n    phone,\n    remoteJid,\n    text: text.trim(),\n    senderName,\n    isGroup\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0003-0003-0003-a1b2c3d40003",
+      "name": "Extract Message Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": {{ JSON.stringify($vars.MOSQUE_SYSTEM_PROMPT) }}\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.senderName + ' يسأل: ' + $json.text) }}\n    }\n  ],\n  \"max_tokens\": 600,\n  \"temperature\": 0.7\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-0004-0004-a1b2c3d40004",
+      "name": "Ask AI (GPT-4o-mini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse = $input.first().json;\nconst aiText = aiResponse.choices[0].message.content;\n\n// Retrieve phone from the earlier extract node\nconst phone = $('Extract Message Data').item.json.phone;\n\nreturn [{\n  json: {\n    phone,\n    aiText\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0005-0005-0005-a1b2c3d40005",
+      "name": "Prepare Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $vars.EVOLUTION_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.phone }}\",\n  \"text\": {{ JSON.stringify($json.aiText) }}\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0006-0006-0006-a1b2c3d40006",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $vars.EVOLUTION_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Extract Message Data').item.json.phone }}\",\n  \"text\": \"عذراً، حدث خطأ تقني. يرجى إعادة المحاولة أو الاتصال بالمسجد مباشرة.\"\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-0007-0007-a1b2c3d40007",
+      "name": "Send Error Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 500]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is Incoming Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Incoming Message?": {
+      "main": [
+        [
+          {
+            "node": "Extract Message Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Extract Message Data": {
+      "main": [
+        [
+          {
+            "node": "Ask AI (GPT-4o-mini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask AI (GPT-4o-mini)": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Reply": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "1"
+}
