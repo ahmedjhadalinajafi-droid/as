@@ -174,22 +174,22 @@ class MasjidApp extends StatelessWidget {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark ? const Color(0xFF0D1B2E) : Colors.white,
-        indicatorColor: navy.withOpacity(0.15),
+        indicatorColor: primary.withOpacity(0.15),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
-            color: states.contains(WidgetState.selected) ? navy : Colors.grey,
+            color: states.contains(WidgetState.selected) ? primary : Colors.grey,
           ),
         ),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
-            color: states.contains(WidgetState.selected) ? navy : Colors.grey,
+            color: states.contains(WidgetState.selected) ? primary : Colors.grey,
             fontFamily: 'ScheherazadeNew',
             fontSize: 13,
           ),
         ),
       ),
       scaffoldBackgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
-      dividerColor: navy.withOpacity(0.12),
+      dividerColor: primary.withOpacity(0.12),
     );
   }
 }
@@ -409,6 +409,12 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
     const gold = Color(0xFFC9A843);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0D1B2E) : Colors.white;
+    final activeColor = isDark ? gold : navy;
+    final activeGradient = isDark
+        ? [const Color(0xFF3D2B00), const Color(0xFF5C4200)]
+        : [navy, const Color(0xFF2A5BA8)];
+    final activeIconColor = isDark ? gold : gold;
+    final activeLabelColor = isDark ? Colors.black : Colors.white;
 
     return SafeArea(
       child: Container(
@@ -418,12 +424,12 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
           borderRadius: BorderRadius.circular(32),
           boxShadow: [
             BoxShadow(
-              color: navy.withOpacity(0.22),
+              color: activeColor.withOpacity(0.22),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),
             BoxShadow(
-              color: navy.withOpacity(0.08),
+              color: activeColor.withOpacity(0.08),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -446,8 +452,8 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
                 ),
                 decoration: BoxDecoration(
                   gradient: selected
-                      ? const LinearGradient(
-                          colors: [navy, Color(0xFF2A5BA8)],
+                      ? LinearGradient(
+                          colors: activeGradient,
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         )
@@ -456,7 +462,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
                   boxShadow: selected
                       ? [
                           BoxShadow(
-                            color: navy.withOpacity(0.35),
+                            color: activeColor.withOpacity(0.35),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           )
@@ -470,7 +476,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
                       scale: _bounceAnim[i],
                       child: Icon(
                         selected ? _items[i].selectedIcon : _items[i].icon,
-                        color: selected ? gold : Colors.grey.shade400,
+                        color: selected ? activeIconColor : Colors.grey.shade400,
                         size: 22,
                       ),
                     ),
@@ -484,8 +490,8 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
                                 const SizedBox(width: 7),
                                 Text(
                                   _items[i].label,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: activeLabelColor,
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                     fontFamily: 'ScheherazadeNew',
@@ -664,7 +670,7 @@ class _HomePageState extends State<HomePage> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isDark
-                    ? [const Color(0xFF0A1628), const Color(0xFF1B3D6F)]
+                    ? [const Color(0xFF0A1628), const Color(0xFF2A1F00)]
                     : [const Color(0xFF1B3D6F), const Color(0xFF2A5BA8)],
                 begin: Alignment.topCenter,
                 end: Alignment.center,
