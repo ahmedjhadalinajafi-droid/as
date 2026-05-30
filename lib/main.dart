@@ -122,28 +122,31 @@ class MasjidApp extends StatelessWidget {
     const gold = Color(0xFFC9A843);
     final isDark = brightness == Brightness.dark;
 
+    final primary = isDark ? gold : navy;
+    final onPrimary = isDark ? Colors.black : Colors.white;
+
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: navy,
+        seedColor: primary,
         brightness: brightness,
-        primary: navy,
-        secondary: gold,
-        tertiary: gold,
+        primary: primary,
+        secondary: isDark ? navy : gold,
+        tertiary: isDark ? navy : gold,
       ),
       fontFamily: 'ScheherazadeNew',
       appBarTheme: AppBarTheme(
         centerTitle: true,
-        backgroundColor: navy,
-        foregroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF0A1628) : navy,
+        foregroundColor: isDark ? gold : Colors.white,
         elevation: 3,
         shadowColor: navy.withOpacity(0.4),
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           fontFamily: 'ScheherazadeNew',
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: Colors.white,
+          color: isDark ? gold : Colors.white,
         ),
       ),
       cardTheme: CardThemeData(
@@ -152,15 +155,15 @@ class MasjidApp extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: BorderSide(
-            color: isDark ? const Color(0xFF3A5070) : const Color(0xFFE8D8A0),
+            color: isDark ? gold.withOpacity(0.25) : const Color(0xFFE8D8A0),
             width: 0.8,
           ),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: navy,
-          foregroundColor: Colors.white,
+          backgroundColor: primary,
+          foregroundColor: onPrimary,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12)),
         ),
