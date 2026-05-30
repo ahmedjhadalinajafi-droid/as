@@ -16,6 +16,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'announcements_page.dart';
+import 'campaigns_page.dart';
+import 'date_converter_page.dart';
 import 'events_page.dart';
 import 'hijri_calendar_page.dart';
 import 'mafatih_page.dart';
@@ -223,6 +225,7 @@ class _MainShellState extends State<MainShell> {
     PrayerTimesPage.new,
     SocialMediaPage.new,
     EventsPage.new,
+    CampaignsPage.new,
     MorePage.new,
   ];
 
@@ -233,10 +236,11 @@ class _MainShellState extends State<MainShell> {
     'prayer': 2,
     'social': 3,
     'events': 4,
-    'more': 5,
-    'announcements': 5,
-    'mafatih': 5,
-    'ziyarat': 5,
+    'campaigns': 5,
+    'more': 6,
+    'announcements': 6,
+    'mafatih': 6,
+    'ziyarat': 6,
   };
 
   Widget _page(int i) => _pageCache.putIfAbsent(i, () => _pageBuilders[i]());
@@ -400,6 +404,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
     _NavItem(icon: Icons.access_time_outlined,selectedIcon: Icons.access_time_filled,   label: 'الصلاة'),
     _NavItem(icon: Icons.people_outline,      selectedIcon: Icons.people_rounded,       label: 'تواصل'),
     _NavItem(icon: Icons.event_outlined,      selectedIcon: Icons.event_rounded,        label: 'الفعاليات'),
+    _NavItem(icon: Icons.volunteer_activism_outlined, selectedIcon: Icons.volunteer_activism, label: 'الحملات'),
     _NavItem(icon: Icons.grid_view_outlined,  selectedIcon: Icons.grid_view_rounded,    label: 'المزيد'),
   ];
 
@@ -471,8 +476,14 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
             ),
           ],
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: List.generate(_items.length, (i) {
             final selected = i == widget.currentIndex;
@@ -483,7 +494,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
                 duration: const Duration(milliseconds: 350),
                 curve: Curves.easeInOut,
                 padding: EdgeInsets.symmetric(
-                  horizontal: selected ? 18 : 14,
+                  horizontal: selected ? 14 : 10,
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
@@ -542,6 +553,10 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
               ),
             );
           }),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -772,7 +787,11 @@ class _HomePageState extends State<HomePage> {
 
                 // Hijri date
                 const _HijriDateChip(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+
+                // Day-of-week duaa / ziyarat shortcuts (like the photo)
+                const _DayWorshipTabs(),
+                const SizedBox(height: 12),
 
                 // Countdown card
                 Padding(
@@ -1386,6 +1405,102 @@ class _DualDateBanner extends StatelessWidget {
   }
 }
 
+// ─── Day-of-Week Worship Shortcuts (Home header) ─────────────────────────────
+// Shows the day's duaa + ziyarat as small white pills, like the reference photo.
+// Tapping a pill opens that chapter inside Mafatih al-Jinan.
+
+class _DayWorshipTabs extends StatelessWidget {
+  const _DayWorshipTabs();
+
+  static const _navy = Color(0xFF1B3D6F);
+  static const _gold = Color(0xFFC9A843);
+
+  // weekday (Mon=1 … Sun=7) → list of [label, titleContains]
+  static const Map<int, List<List<String>>> _byWeekday = {
+    1: [ // الاثنين
+      ['دعاء يوم الاثنين', 'دعاء يوم الاثنين'],
+      ['زيارة الحسن (ع)', 'زيارة الحسن (ع)'],
+    ],
+    2: [ // الثلاثاء
+      ['دعاء يوم الثلاثاء', 'دعاء يوم الثلاثاء'],
+    ],
+    3: [ // الأربعاء
+      ['دعاء يوم الأربعاء', 'دعاء يوم الأربعاء'],
+    ],
+    4: [ // الخميس
+      ['دعاء يوم الخميس', 'دعاء يوم الخميس'],
+      ['دعاء كميل', 'كميل'],
+    ],
+    5: [ // الجمعة
+      ['دعاء يوم الجمعة', 'دعاء يوم الجمعة'],
+      ['دعاء الندبة', 'الندبة'],
+      ['زيارة آل ياسين', 'آل ياسين'],
+      ['دعاء السمات', 'السمات'],
+    ],
+    6: [ // السبت
+      ['دعاء يوم السبت', 'دعاء يوم السبت'],
+    ],
+    7: [ // الأحد
+      ['دعاء يوم الأحد', 'دعاء يوم الأحد'],
+      ['زيارة أمين الله', 'أمين الله'],
+    ],
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _byWeekday[DateTime.now().weekday] ?? const [];
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final label = items[i][0];
+          final match = items[i][1];
+          return GestureDetector(
+            onTap: () => openMafatihChapter(context, match),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.auto_stories, size: 15, color: _gold),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: _navy,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'ScheherazadeNew',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 // ─── Home Announcements Section ──────────────────────────────────────────────
 
 class _HomeAnnouncementsSection extends StatelessWidget {
@@ -1558,6 +1673,12 @@ class MorePage extends StatelessWidget {
         label: 'التقويم الهجري',
         color: const Color(0xFF4CAF50),
         page: const HijriCalendarPage(),
+      ),
+      _MoreItem(
+        icon: Icons.swap_vert_circle,
+        label: 'محوّل التاريخ',
+        color: const Color(0xFF009688),
+        page: const DateConverterPage(),
       ),
       _MoreItem(
         icon: Icons.auto_stories,

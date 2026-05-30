@@ -5,6 +5,30 @@ import 'package:flutter/services.dart';
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
 
+// Opens the Mafatih reader at the first chapter whose title contains [titleContains].
+// Used by the home page day-of-week worship shortcuts.
+Future<void> openMafatihChapter(
+    BuildContext context, String titleContains) async {
+  try {
+    final raw = await rootBundle.loadString('assets/mafatih.json');
+    final list = (json.decode(raw) as List<dynamic>)
+        .map((e) => _Chapter.fromJson(e as Map<String, dynamic>))
+        .where((c) => c.title.isNotEmpty && c.content.isNotEmpty)
+        .toList();
+    final idx = list.indexWhere((c) => c.title.contains(titleContains));
+    if (idx < 0 || !context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: _ReaderPage(chapters: list, initialIndex: idx),
+        ),
+      ),
+    );
+  } catch (_) {}
+}
+
 // ─── Model ────────────────────────────────────────────────────────────────────
 
 class _Chapter {
