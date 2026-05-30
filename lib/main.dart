@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:home_widget/home_widget.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -56,13 +55,6 @@ class ThemeProvider extends ChangeNotifier {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar', null);
-
-  // Set App Group ID at startup so home_widget works on iOS
-  if (!kIsWeb) {
-    try {
-      await HomeWidget.setAppGroupId('group.com.ahmed.najafi.masjid');
-    } catch (_) {}
-  }
 
   try {
     if (kIsWeb) {
@@ -647,26 +639,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _updateWidget(Map<String, String> times) async {
-    if (kIsWeb) return;
-    try {
-      // iOS requires App Group so the widget extension can read the data
-      await HomeWidget.setAppGroupId('group.com.ahmed.najafi.masjid');
-
-      await HomeWidget.saveWidgetData<String>('fajr',    times['fajr']    ?? '');
-      await HomeWidget.saveWidgetData<String>('dhuhr',   times['dhuhr']   ?? '');
-      await HomeWidget.saveWidgetData<String>('asr',     times['asr']     ?? '');
-      await HomeWidget.saveWidgetData<String>('maghrib', times['maghrib'] ?? '');
-      await HomeWidget.saveWidgetData<String>('isha',    times['isha']    ?? '');
-      await HomeWidget.saveWidgetData<String>('next_prayer',      _nextPrayer);
-      await HomeWidget.saveWidgetData<String>('next_prayer_time', _nextPrayerTime);
-
-      await HomeWidget.updateWidget(
-        androidName: 'MasjidWidgetProvider',
-        iOSName: 'MasjidWidget',
-      );
-    } catch (e) {
-      debugPrint('Widget update error: $e');
-    }
+    // Widget update removed — home_widget plugin removed
   }
 
   String _todayKey() {
