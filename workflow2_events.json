@@ -1,0 +1,100 @@
+{
+  "name": "📢 Mosque Events Updater",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mosque-events",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "evt-aa01-bb01-cc01-dd0100000001",
+      "name": "Events Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "mosque-events"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst data = body.data || body;\n\nconst text = data.text || '';\nconst mediaBase64 = data.mediaBase64 || null;\nconst mimeType = data.mimeType || 'image/jpeg';\nconst messageType = data.messageType || 'text';\nconst remoteJid = data.key?.remoteJid || '';\nconst senderName = data.pushName || 'الإدارة';\n\nif (!mediaBase64 && !text) return [];\n\nreturn [{ json: { text, mediaBase64, mimeType, messageType, remoteJid, senderName } }];"
+      },
+      "id": "evt-aa02-bb02-cc02-dd0200000002",
+      "name": "Extract Event Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-goog-api-key", "value": "YOUR_GEMINI_API_KEY" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"system_instruction\": {\n    \"parts\": [{ \"text\": \"أنت مساعد يستخرج ويلخص معلومات أحداث وإعلانات المسجد. إذا كانت صورة اقرأ كل النص الموجود فيها واستخرج: اسم الحدث، التاريخ، الوقت، المكان، والتفاصيل. قدّم الملخص بالعربية بشكل منظم ومختصر.\" }]\n  },\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": $json.mediaBase64\n        ? [{\"inline_data\": {\"mime_type\": $json.mimeType, \"data\": $json.mediaBase64}}, {\"text\": \"استخرج ولخّص معلومات هذا الحدث أو الإعلان\"}]\n        : [{\"text\": \"لخّص هذا الحدث: \" + $json.text}]\n    }\n  ],\n  \"generationConfig\": {\"maxOutputTokens\": 300, \"temperature\": 0.3}\n}",
+        "options": {}
+      },
+      "id": "evt-aa03-bb03-cc03-dd0300000003",
+      "name": "Read & Summarize (Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst eventsPath = '/tmp/mosque_events.txt';\n\nconst summary = $input.first().json.candidates[0].content.parts[0].text;\nconst now = new Date();\nconst dateStr = now.toLocaleDateString('ar-SA', {\n  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'\n});\n\nconst entry = `\\n\\n--- ${dateStr} ---\\n${summary}`;\n\ntry {\n  if (fs.existsSync(eventsPath)) {\n    fs.appendFileSync(eventsPath, entry, 'utf8');\n  } else {\n    fs.writeFileSync(eventsPath, '=== أحداث وإعلانات المسجد ===\\n' + entry, 'utf8');\n  }\n  return [{ json: { success: true, summary, remoteJid: $('Extract Event Data').item.json.remoteJid } }];\n} catch (err) {\n  return [{ json: { success: false, error: err.message, remoteJid: $('Extract Event Data').item.json.remoteJid } }];\n}"
+      },
+      "id": "evt-aa04-bb04-cc04-dd0400000004",
+      "name": "Save to Events File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_BAILEYS_IP:3000/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-secret", "value": "masjid-secret-2024" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"number\": $json.remoteJid, \"text\": \"✅ تم حفظ الإعلان بنجاح:\\n\\n\" + $json.summary}",
+        "options": {}
+      },
+      "id": "evt-aa05-bb05-cc05-dd0500000005",
+      "name": "Confirm to Sender",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Events Webhook": {
+      "main": [[{"node": "Extract Event Data", "type": "main", "index": 0}]]
+    },
+    "Extract Event Data": {
+      "main": [[{"node": "Read & Summarize (Gemini)", "type": "main", "index": 0}]]
+    },
+    "Read & Summarize (Gemini)": {
+      "main": [[{"node": "Save to Events File", "type": "main", "index": 0}]]
+    },
+    "Save to Events File": {
+      "main": [[{"node": "Confirm to Sender", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "versionId": "2"
+}
