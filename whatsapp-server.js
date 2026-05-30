@@ -9,7 +9,11 @@ app.use(express.json({ limit: '50mb' }));
 
 const PORT = process.env.PORT || 3000;
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
+const N8N_EVENTS_WEBHOOK_URL = process.env.N8N_EVENTS_WEBHOOK_URL;
 const SERVER_SECRET = process.env.SERVER_SECRET || 'masjid-secret';
+
+// كلمات تشير أن الصورة حدث من الإدارة
+const EVENT_KEYWORDS = ['📢', 'حدث', 'إعلان', 'موعد', 'خبر'];
 
 let sock = null;
 
@@ -36,16 +40,16 @@ app.get('/status', (req, res) => {
   res.json({ connected: sock !== null });
 });
 
-async function forwardToN8n(payload) {
-  if (!N8N_WEBHOOK_URL) return;
+async function sendToWebhook(url, payload) {
+  if (!url) return;
   try {
-    await fetch(N8N_WEBHOOK_URL, {
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
   } catch (err) {
-    console.error('❌ تعذّر الإرسال إلى n8n:', err.message);
+    console.error('❌ خطأ في الإرسال لـ n8n:', err.message);
   }
 }
 
@@ -92,35 +96,38 @@ async function startBot() {
       let mimeType = null;
       let messageType = 'text';
 
-      // نص عادي
       if (msgContent.conversation) {
         text = msgContent.conversation;
 
-      // نص موسّع
       } else if (msgContent.extendedTextMessage?.text) {
         text = msgContent.extendedTextMessage.text;
 
-      // صورة
       } else if (msgContent.imageMessage) {
-        text = msgContent.imageMessage.caption || 'صف هذه الصورة باللغة العربية وأجب إذا كان فيها سؤال يتعلق بالمسجد.';
+        const caption = msgContent.imageMessage.caption || '';
+        text = caption;
         mimeType = msgContent.imageMessage.mimetype || 'image/jpeg';
         messageType = 'image';
         try {
-          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: console, reuploadRequest: sock.updateMediaMessage });
+          const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
+            logger: console,
+            reuploadRequest: sock.updateMediaMessage
+          });
           mediaBase64 = buffer.toString('base64');
           console.log('🖼️ تم تحميل الصورة');
         } catch (err) {
           console.error('❌ خطأ في تحميل الصورة:', err.message);
         }
 
-      // رسالة صوتية (ptt = push to talk)
       } else if (msgContent.audioMessage || msgContent.pttMessage) {
         const audioMsg = msgContent.audioMessage || msgContent.pttMessage;
         mimeType = audioMsg.mimetype || 'audio/ogg; codecs=opus';
         messageType = 'voice';
-        text = 'استمع لهذه الرسالة الصوتية وأجب على طلب المتحدث باللغة العربية بشكل مفيد.';
+        text = 'استمع لهذه الرسالة الصوتية وأجب على طلب المتحدث باللغة العربية.';
         try {
-          const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: console, reuploadRequest: sock.updateMediaMessage });
+          const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
+            logger: console,
+            reuploadRequest: sock.updateMediaMessage
+          });
           mediaBase64 = buffer.toString('base64');
           console.log('🎙️ تم تحميل الرسالة الصوتية');
         } catch (err) {
@@ -131,9 +138,7 @@ async function startBot() {
       if (!text && !mediaBase64) continue;
 
       const senderName = msg.pushName || 'الزائر الكريم';
-      console.log(`📨 [${messageType}] من ${senderName}: ${text.substring(0, 50)}`);
-
-      await forwardToN8n({
+      const payload = {
         event: 'messages.upsert',
         data: {
           key: msg.key,
@@ -143,7 +148,19 @@ async function startBot() {
           mediaBase64,
           mimeType
         }
-      });
+      };
+
+      // صورة تحتوي على كلمة حدث → إرسال لـ workflow الأحداث
+      const isEventImage = messageType === 'image' &&
+        EVENT_KEYWORDS.some(kw => text.includes(kw));
+
+      if (isEventImage && N8N_EVENTS_WEBHOOK_URL) {
+        console.log(`📢 إعلان/حدث من ${senderName} → يُرسل لـ Workflow الأحداث`);
+        await sendToWebhook(N8N_EVENTS_WEBHOOK_URL, payload);
+      } else {
+        console.log(`📨 [${messageType}] من ${senderName}: ${text.substring(0, 50)}`);
+        await sendToWebhook(N8N_WEBHOOK_URL, payload);
+      }
     }
   });
 }
