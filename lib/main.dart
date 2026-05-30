@@ -553,7 +553,6 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
               ),
             );
           }),
-                ),
               ),
             ),
           ),
@@ -1289,121 +1288,6 @@ class _SlideCard extends StatelessWidget {
 }
 
 // ─── More Page ────────────────────────────────────────────────────────────────
-
-// ─── Home Announcements Section ──────────────────────────────────────────────
-
-// ─── Dual Date Banner ────────────────────────────────────────────────────────
-
-class _DualDateBanner extends StatelessWidget {
-  const _DualDateBanner();
-
-  static const _hijriMonths = [
-    'محرم','صفر','ربيع الأول','ربيع الثاني',
-    'جمادى الأولى','جمادى الثانية','رجب','شعبان',
-    'رمضان','شوال','ذو القعدة','ذو الحجة',
-  ];
-
-  static const _arDays = [
-    'الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد',
-  ];
-
-  static const _arMonths = [
-    'يناير','فبراير','مارس','أبريل','مايو','يونيو',
-    'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    const navy = Color(0xFF1B3D6F);
-    const gold = Color(0xFFC9A843);
-
-    final now = DateTime.now();
-    final hijri = HijriCalendar.now();
-
-    final dayName = _arDays[now.weekday - 1];
-    final gregStr = '$dayName  ${now.day} ${_arMonths[now.month - 1]} ${now.year}م';
-    final hijriStr = '${hijri.hDay} ${_hijriMonths[hijri.hMonth - 1]} ${hijri.hYear}هـ';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: navy.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: gold.withOpacity(0.3), width: 0.8),
-      ),
-      child: Row(
-        children: [
-          // Hijri date
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.nightlight_round, size: 14, color: gold),
-                    const SizedBox(width: 5),
-                    Text('هجري',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: cs.onSurface.withOpacity(0.5))),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  hijriStr,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: navy,
-                    fontFamily: 'ScheherazadeNew',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Divider
-          Container(
-            width: 1,
-            height: 36,
-            color: gold.withOpacity(0.3),
-          ),
-          const SizedBox(width: 12),
-          // Gregorian date
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text('ميلادي',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: cs.onSurface.withOpacity(0.5))),
-                    const SizedBox(width: 5),
-                    Icon(Icons.wb_sunny_outlined, size: 14, color: gold),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  gregStr,
-                  textAlign: TextAlign.end,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: navy,
-                    fontFamily: 'ScheherazadeNew',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Day-of-Week Worship Shortcuts (Home header) ─────────────────────────────
 // Shows the day's duaa + ziyarat as small white pills, like the reference photo.
