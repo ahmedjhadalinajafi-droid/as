@@ -21,8 +21,10 @@ dependencies:
   firebase_auth: ^5.5.2
   google_sign_in: ^6.2.2
 
-  # Local Notifications — Android only; iOS uses Firebase Messaging natively
-  # flutter_local_notifications removed (breaks iOS build with use_frameworks!)
+  # Local Notifications — prayer time scheduling
+  flutter_local_notifications: ^18.0.1
+  flutter_timezone: ^1.0.8
+  timezone: ^0.9.4
 
   # Location & Compass
   geolocator: ^14.0.2

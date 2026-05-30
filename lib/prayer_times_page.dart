@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'notification_service.dart';
 
 class PrayerTimesPage extends StatefulWidget {
   const PrayerTimesPage({super.key});
@@ -17,6 +18,9 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   Timer? _timer;
   String _countdown = '';
   String _nextPrayer = '';
+  Map<String, bool> _notifSettings = {
+    'fajr': true, 'dhuhr': true, 'asr': true, 'maghrib': true, 'isha': true,
+  };
 
   static const _navy = Color(0xFF1B3D6F);
   static const _gold = Color(0xFFC9A843);
@@ -68,6 +72,18 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   void initState() {
     super.initState();
     _load();
+    _loadNotifSettings();
+  }
+
+  Future<void> _loadNotifSettings() async {
+    final settings = await NotificationService().getNotificationSettings();
+    if (mounted) setState(() => _notifSettings = settings);
+  }
+
+  Future<void> _toggleNotif(String prayerKey) async {
+    final newVal = !(_notifSettings[prayerKey] ?? true);
+    setState(() => _notifSettings[prayerKey] = newVal);
+    await NotificationService().setPrayerNotification(prayerKey, newVal);
   }
 
   @override
@@ -319,6 +335,8 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
       final name = _prayerNames[key] ?? key;
       final nameEn = _prayerNamesEn[key] ?? key;
       final icon = _prayerIcons[key] ?? Icons.access_time;
+      final isSunrise = key == 'sunrise';
+      final notifEnabled = _notifSettings[key] ?? true;
 
       bool isNext = false;
       final parts = time.split(':');
@@ -332,6 +350,35 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
       final rowBg = isNext
           ? (isDark ? const Color(0xFF1A2F1A) : const Color(0xFFE8F5E9))
           : Colors.transparent;
+
+      Widget bellWidget;
+      if (isNext) {
+        bellWidget = AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: _green.withOpacity(0.5), blurRadius: 8, spreadRadius: 1),
+            ],
+          ),
+          child: const Icon(Icons.notifications_active, size: 20, color: _green),
+        );
+      } else if (isSunrise) {
+        bellWidget = Icon(Icons.wb_twilight, size: 20, color: cs.onSurface.withOpacity(0.25));
+      } else {
+        bellWidget = GestureDetector(
+          onTap: () => _toggleNotif(key),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Icon(
+              notifEnabled ? Icons.notifications : Icons.notifications_off_outlined,
+              key: ValueKey(notifEnabled),
+              size: 20,
+              color: notifEnabled ? _gold : cs.onSurface.withOpacity(0.3),
+            ),
+          ),
+        );
+      }
 
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -366,25 +413,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
               Expanded(
                 child: Row(
                   children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 400),
-                      decoration: isNext
-                          ? BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: _green.withOpacity(0.5),
-                                  blurRadius: 8,
-                                  spreadRadius: 1,
-                                )
-                              ])
-                          : null,
-                      child: Icon(
-                        isNext ? Icons.notifications_active : Icons.notifications_outlined,
-                        size: 18,
-                        color: isNext ? _green : cs.onSurface.withOpacity(0.35),
-                      ),
-                    ),
+                    bellWidget,
                     const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
