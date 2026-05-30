@@ -1,0 +1,125 @@
+{
+  "name": "📝 Masjid Telegram Admin (Content Manager)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "tg-admin-001-001-001-tgadmin00001",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 300],
+      "webhookId": "masjid-admin-tg"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose"},
+          "conditions": [
+            {
+              "id": "admin-check",
+              "leftValue": "={{ $json.message.from.id }}",
+              "rightValue": "YOUR_TELEGRAM_ADMIN_ID",
+              "operator": {"type": "string", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "tg-admin-002-002-002-tgadmin00002",
+      "name": "Admin Only",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json.message || {};\nconst chatId = msg.chat?.id;\nconst TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN';\n\nlet type = 'text';\nlet text = msg.text || msg.caption || '';\nlet mediaBase64 = null;\nlet mimeType = null;\nlet fileId = null;\n\nif (msg.photo && msg.photo.length) {\n  type = 'photo';\n  fileId = msg.photo[msg.photo.length - 1].file_id;\n  mimeType = 'image/jpeg';\n} else if (msg.voice) {\n  type = 'voice';\n  fileId = msg.voice.file_id;\n  mimeType = msg.voice.mime_type || 'audio/ogg';\n} else if (msg.audio) {\n  type = 'voice';\n  fileId = msg.audio.file_id;\n  mimeType = msg.audio.mime_type || 'audio/mpeg';\n} else if (msg.document) {\n  type = 'photo';\n  fileId = msg.document.file_id;\n  mimeType = msg.document.mime_type || 'image/jpeg';\n}\n\nif (fileId) {\n  const r = await fetch(`https://api.telegram.org/bot${TOKEN}/getFile?file_id=${fileId}`);\n  const j = await r.json();\n  const filePath = j.result?.file_path;\n  if (filePath) {\n    const fr = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${filePath}`);\n    const ab = await fr.arrayBuffer();\n    mediaBase64 = Buffer.from(ab).toString('base64');\n  }\n}\n\nif (!text && !mediaBase64) return [];\n\nreturn [{ json: { type, text, mediaBase64, mimeType, chatId } }];"
+      },
+      "id": "tg-admin-003-003-003-tgadmin00003",
+      "name": "Prepare Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-goog-api-key", "value": "YOUR_GEMINI_API_KEY"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"system_instruction\": {\n    \"parts\": [{ \"text\": \"أنت مساعد يستخرج ويلخّص معلومات المسجد لتُحفظ في قاعدة المعرفة. إذا كان المحتوى صورة فاقرأ كل النص الموجود فيها. إذا كان صوتاً ففرّغه إلى نص. لخّص بالعربية فقط بشكل منظم ومختصر يصلح ليُحفظ كمعلومة دائمة عن المسجد (مثل أوقات الصلاة، الأنشطة، الإعلانات، الخدمات).\" }]\n  },\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": $json.mediaBase64\n        ? [{\"inline_data\": {\"mime_type\": $json.mimeType, \"data\": $json.mediaBase64}}, {\"text\": $json.text || \"استخرج ولخّص المعلومات من هذا الملف\"}]\n        : [{\"text\": \"لخّص واحفظ هذه المعلومة: \" + $json.text}]\n    }\n  ],\n  \"generationConfig\": {\"maxOutputTokens\": 400, \"temperature\": 0.3}\n}",
+        "options": {}
+      },
+      "id": "tg-admin-004-004-004-tgadmin00004",
+      "name": "Summarize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://docs.googleapis.com/v1/documents/YOUR_GOOGLE_DOC_ID:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDocsOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"requests\": [\n    {\n      \"insertText\": {\n        \"endOfSegmentLocation\": {\"segmentId\": \"\"},\n        \"text\": \"\\n\\n--- \" + new Date().toLocaleDateString('ar') + \" ---\\n\" + $json.candidates[0].content.parts[0].text\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "tg-admin-005-005-005-tgadmin00005",
+      "name": "Append to Google Doc",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_TELEGRAM_BOT_TOKEN/sendMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": $('Prepare Content').item.json.chatId,\n  \"text\": \"✅ تم حفظ المعلومة في قاعدة معرفة المسجد:\\n\\n\" + $('Summarize').item.json.candidates[0].content.parts[0].text\n}",
+        "options": {}
+      },
+      "id": "tg-admin-006-006-006-tgadmin00006",
+      "name": "Confirm to Admin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {"main": [[{"node": "Admin Only", "type": "main", "index": 0}]]},
+    "Admin Only": {"main": [[{"node": "Prepare Content", "type": "main", "index": 0}], []]},
+    "Prepare Content": {"main": [[{"node": "Summarize", "type": "main", "index": 0}]]},
+    "Summarize": {"main": [[{"node": "Append to Google Doc", "type": "main", "index": 0}]]},
+    "Append to Google Doc": {"main": [[{"node": "Confirm to Admin", "type": "main", "index": 0}]]}
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "versionId": "1"
+}
