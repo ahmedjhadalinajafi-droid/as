@@ -126,6 +126,8 @@ class _MafatihPageState extends State<MafatihPage>
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics()),
         slivers: [
           // ── Header ──────────────────────────────────────────────────
           SliverAppBar(
@@ -637,34 +639,52 @@ class _ReaderPageState extends State<_ReaderPage> {
       ),
       body: Column(
         children: [
-          // ── Navigation bar ─────────────────────────────────────────
+          // ── Navigation bar (Arabic book convention, matches Quran) ──
+          // RIGHT side → previous chapter, LEFT side → next chapter
           Container(
             color: isDark ? const Color(0xFF1E2D4A) : Colors.white,
             padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(
-                  onPressed: _index > 0 ? () => _go(_index - 1) : null,
-                  icon: const Icon(Icons.arrow_forward_ios, size: 16),
-                  color: _gold,
-                ),
-                Expanded(
-                  child: Text(
-                    '${_index + 1} / ${widget.chapters.length}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: cs.onSurface.withOpacity(0.5),
+                // RIGHT in RTL → previous chapter
+                Flexible(
+                  child: TextButton.icon(
+                    onPressed: _index > 0 ? () => _go(_index - 1) : null,
+                    icon: const Icon(Icons.arrow_back_ios, size: 14, color: _gold),
+                    label: Text(
+                      _index > 0 ? widget.chapters[_index - 1].title : '',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12, fontFamily: 'ScheherazadeNew'),
                     ),
                   ),
                 ),
-                IconButton(
-                  onPressed: _index < widget.chapters.length - 1
-                      ? () => _go(_index + 1)
-                      : null,
-                  icon: const Icon(Icons.arrow_back_ios, size: 16),
-                  color: _gold,
+                Text(
+                  '${_index + 1} / ${widget.chapters.length}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: cs.onSurface.withOpacity(0.5),
+                  ),
+                ),
+                // LEFT in RTL → next chapter
+                Flexible(
+                  child: TextButton.icon(
+                    onPressed: _index < widget.chapters.length - 1
+                        ? () => _go(_index + 1)
+                        : null,
+                    icon: const Icon(Icons.arrow_forward_ios,
+                        size: 14, color: _gold),
+                    label: Text(
+                      _index < widget.chapters.length - 1
+                          ? widget.chapters[_index + 1].title
+                          : '',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12, fontFamily: 'ScheherazadeNew'),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -672,82 +692,88 @@ class _ReaderPageState extends State<_ReaderPage> {
           const Divider(height: 1),
 
           // ── Content ────────────────────────────────────────────────
+          // LTR + reverse:true → swipe like an Arabic book (matches Quran)
           Expanded(
-            child: PageView.builder(
-              controller: _ctrl,
-              reverse: true,
-              itemCount: widget.chapters.length,
-              onPageChanged: (i) => setState(() => _index = i),
-              itemBuilder: (_, i) {
-                final ch = widget.chapters[i];
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Decorative top line
-                      Center(
-                        child: Container(
-                          width: 60,
-                          height: 3,
-                          decoration: BoxDecoration(
-                            color: _gold,
-                            borderRadius: BorderRadius.circular(2),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: PageView.builder(
+                controller: _ctrl,
+                reverse: true,
+                physics: const BouncingScrollPhysics(),
+                itemCount: widget.chapters.length,
+                onPageChanged: (i) => setState(() => _index = i),
+                itemBuilder: (_, i) {
+                  final ch = widget.chapters[i];
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Decorative top line
+                        Center(
+                          child: Container(
+                            width: 60,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: _gold,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                      // Title
-                      Text(
-                        ch.title,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'ScheherazadeNew',
-                          fontSize: _fontSize + 6,
-                          fontWeight: FontWeight.bold,
-                          color: _navy,
-                        ),
-                      ),
-
-                      if (ch.subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                        // Title
                         Text(
-                          ch.subtitle,
+                          ch.title,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: 'ScheherazadeNew',
-                            fontSize: _fontSize - 2,
-                            color: cs.onSurface.withOpacity(0.55),
+                            fontSize: _fontSize + 6,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? _gold : _navy,
+                          ),
+                        ),
+
+                        if (ch.subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            ch.subtitle,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'ScheherazadeNew',
+                              fontSize: _fontSize - 2,
+                              color: cs.onSurface.withOpacity(0.55),
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 24),
+                        Container(
+                          height: 1,
+                          color: _gold.withOpacity(0.3),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Content
+                        SelectableText(
+                          ch.content,
+                          textDirection: TextDirection.rtl,
+                          textAlign: TextAlign.justify,
+                          style: TextStyle(
+                            fontFamily: 'ScheherazadeNew',
+                            fontSize: _fontSize,
+                            height: 2.2,
+                            color: isDark
+                                ? Colors.white.withOpacity(0.9)
+                                : const Color(0xFF1A1A1A),
                           ),
                         ),
                       ],
-
-                      const SizedBox(height: 24),
-                      Container(
-                        height: 1,
-                        color: _gold.withOpacity(0.3),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Content
-                      SelectableText(
-                        ch.content,
-                        textDirection: TextDirection.rtl,
-                        textAlign: TextAlign.justify,
-                        style: TextStyle(
-                          fontFamily: 'ScheherazadeNew',
-                          fontSize: _fontSize,
-                          height: 2.2,
-                          color: isDark
-                              ? Colors.white.withOpacity(0.9)
-                              : const Color(0xFF1A1A1A),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],
