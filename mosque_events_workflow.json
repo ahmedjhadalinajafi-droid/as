@@ -1,0 +1,74 @@
+{
+  "name": "Mosque Events Updater",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mosque-events",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "evt-0001-0001-0001-evt000000001",
+      "name": "Events Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "mosque-events"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "ضع_مفتاح_Gemini_هنا"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"system_instruction\": {\n    \"parts\": [{ \"text\": \"أنت مساعد يلخص أحداث وإعلانات المسجد. لخّص الحدث التالي بشكل مختصر وواضح باللغة العربية في جملتين أو ثلاث. ابدأ بذكر الموعد والتفاصيل المهمة.\" }]\n  },\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [{ \"text\": $json.body.event }]\n    }\n  ],\n  \"generationConfig\": {\n    \"maxOutputTokens\": 200,\n    \"temperature\": 0.5\n  }\n}",
+        "options": {}
+      },
+      "id": "evt-0002-0002-0002-evt000000002",
+      "name": "Summarize Event (Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst eventsPath = '/tmp/mosque_events.txt';\n\nconst summary = $input.first().json.candidates[0].content.parts[0].text;\nconst now = new Date();\nconst dateStr = now.toLocaleDateString('ar-SA', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\nconst entry = `\\n\\n--- ${dateStr} ---\\n${summary}`;\n\ntry {\n  if (fs.existsSync(eventsPath)) {\n    fs.appendFileSync(eventsPath, entry, 'utf8');\n  } else {\n    fs.writeFileSync(eventsPath, '=== أحداث وإعلانات المسجد ===\\n' + entry, 'utf8');\n  }\n  return [{ json: { success: true, summary, message: 'تم حفظ الحدث بنجاح ✅' } }];\n} catch (err) {\n  return [{ json: { success: false, error: err.message } }];\n}"
+      },
+      "id": "evt-0003-0003-0003-evt000000003",
+      "name": "Save to Events File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Events Webhook": {
+      "main": [
+        [{"node": "Summarize Event (Gemini)", "type": "main", "index": 0}]
+      ]
+    },
+    "Summarize Event (Gemini)": {
+      "main": [
+        [{"node": "Save to Events File", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1"
+}
