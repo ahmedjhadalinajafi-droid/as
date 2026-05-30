@@ -1,6 +1,7 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const express = require('express');
+const qrcode = require('qrcode-terminal');
 require('dotenv').config();
 
 const app = express();
@@ -62,13 +63,17 @@ async function startBot() {
   sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: true,
     browser: ['مسجد بوت', 'Chrome', '1.0']
   });
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      console.log('\n📱 امسح هذا الـ QR Code من واتساب:\n');
+      qrcode.generate(qr, { small: true });
+    }
+
     if (connection === 'close') {
       sock = null;
       const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
