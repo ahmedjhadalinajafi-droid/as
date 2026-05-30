@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -12,15 +13,26 @@ class QiblaPage extends StatefulWidget {
 }
 
 class _QiblaPageState extends State<QiblaPage> {
-  double? _qiblaAngle;
-  double _heading = 0;
+  double? _qiblaAngle; // true-north bearing to the Kaaba
+  double _heading = 0; // smoothed TRUE heading of the device
+  double _userLat = 0;
+  double _userLon = 0;
   String _status = 'جارٍ تحديد الموقع...';
   bool _hasLocation = false;
+  bool _aligned = false;
+  bool _wasAligned = false;
+  bool _noCompass = false;
   StreamSubscription<CompassEvent>? _compassSub;
 
   static const double _kaabaLat = 21.4225;
   static const double _kaabaLon = 39.8262;
   static const Color _gold = Color(0xFFC9A843);
+  static const Color _navy = Color(0xFF1B3D6F);
+
+  // Approx. magnetic declination for Baghdad (~+4.5°E, 2026).
+  // The compass reports MAGNETIC north; the Qibla bearing is TRUE north —
+  // adding the declination converts magnetic → true so they line up.
+  static const double _declination = 4.5;
 
   @override
   void initState() {
@@ -40,6 +52,8 @@ class _QiblaPageState extends State<QiblaPage> {
         _status = 'جارٍ تحديد الموقع...';
         _hasLocation = false;
         _qiblaAngle = null;
+        _aligned = false;
+        _wasAligned = false;
       });
     }
 
@@ -65,16 +79,18 @@ class _QiblaPageState extends State<QiblaPage> {
 
     try {
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
       ).timeout(const Duration(seconds: 15));
 
       final angle = _calcQibla(pos.latitude, pos.longitude);
       if (mounted) {
         setState(() {
+          _userLat = pos.latitude;
+          _userLon = pos.longitude;
           _qiblaAngle = angle;
           _hasLocation = true;
-          _status =
-              '${pos.latitude.toStringAsFixed(4)}°، ${pos.longitude.toStringAsFixed(4)}°';
+          _status = 'وجّه أعلى الهاتف نحو علامة الكعبة 🕋';
         });
       }
       _startCompass();
@@ -85,14 +101,46 @@ class _QiblaPageState extends State<QiblaPage> {
 
   void _startCompass() {
     _compassSub?.cancel();
-    _compassSub = FlutterCompass.events?.listen((event) {
+
+    final events = FlutterCompass.events;
+    if (events == null) {
+      // Device has no magnetometer (some tablets / iPads)
+      if (mounted) {
+        setState(() {
+          _noCompass = true;
+          _status = 'جهازك لا يحتوي على بوصلة (مستشعر مغناطيسي)';
+        });
+      }
+      return;
+    }
+
+    _compassSub = events.listen((event) {
       if (!mounted || event.heading == null) return;
-      final raw = event.heading!;
-      // Low-pass filter: smooth out sensor jitter while keeping the arrow stable
+
+      // Convert magnetic → true north, then low-pass filter the jitter
+      final raw = (event.heading! + _declination + 360) % 360;
       double diff = raw - _heading;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
-      setState(() => _heading = (_heading + diff * 0.3 + 360) % 360);
+      final step = diff * 0.25;
+      final newHeading = (_heading + step + 360) % 360;
+      final nowAligned = _alignedFor(newHeading);
+
+      // Skip tiny, invisible updates → far fewer rebuilds (smoother, less battery)
+      if (step.abs() < 0.5 && nowAligned == _aligned) return;
+
+      setState(() {
+        _heading = newHeading;
+        _aligned = nowAligned;
+      });
+
+      // Vibrate once the moment you line up with the Qibla
+      if (nowAligned && !_wasAligned) {
+        HapticFeedback.heavyImpact();
+        Future.delayed(const Duration(milliseconds: 120),
+            () => HapticFeedback.mediumImpact());
+      }
+      _wasAligned = nowAligned;
     });
   }
 
@@ -113,9 +161,9 @@ class _QiblaPageState extends State<QiblaPage> {
     return (_qiblaAngle! - _heading) * math.pi / 180;
   }
 
-  bool get _isAligned {
+  bool _alignedFor(double heading) {
     if (_qiblaAngle == null) return false;
-    double diff = (_heading - _qiblaAngle!).abs() % 360;
+    double diff = (heading - _qiblaAngle!).abs() % 360;
     if (diff > 180) diff = 360 - diff;
     return diff < 5;
   }
@@ -123,7 +171,8 @@ class _QiblaPageState extends State<QiblaPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final aligned = _isAligned;
+    // Gold ONLY when you are actually facing the Qibla
+    final activeColor = _aligned ? _gold : (_hasLocation ? _navy : cs.primary);
 
     return Scaffold(
       appBar: AppBar(
@@ -142,69 +191,90 @@ class _QiblaPageState extends State<QiblaPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Compass with gold glow when Qibla is found
+              // Fixed "facing" indicator above the compass (top = phone front)
+              Icon(Icons.arrow_drop_down,
+                  size: 40,
+                  color: _aligned ? _gold : cs.onSurface.withOpacity(0.4)),
+
+              // Compass — glows gold when aligned
               AnimatedContainer(
-                duration: const Duration(milliseconds: 600),
+                duration: const Duration(milliseconds: 500),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: (_hasLocation ? _gold : cs.primary)
-                          .withOpacity(_hasLocation ? 0.3 : 0.1),
-                      blurRadius: _hasLocation ? 28 : 10,
-                      spreadRadius: _hasLocation ? 6 : 0,
+                      color: activeColor.withOpacity(_aligned ? 0.45 : 0.12),
+                      blurRadius: _aligned ? 34 : 12,
+                      spreadRadius: _aligned ? 8 : 0,
                     ),
                   ],
                 ),
                 child: SizedBox(
-                  width: 280,
-                  height: 280,
+                  width: 290,
+                  height: 290,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       // Compass rose — rotates with device heading
                       CustomPaint(
-                        size: const Size(280, 280),
+                        size: const Size(290, 290),
                         painter: _CompassPainter(
                           heading: _heading,
                           cs: cs,
-                          isLocated: _hasLocation,
+                          aligned: _aligned,
+                          located: _hasLocation,
                         ),
                       ),
 
-                      // Qibla needle — points to Kaaba regardless of device rotation
-                      if (_hasLocation)
-                        Transform.rotate(
-                          angle: _needleAngle,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.navigation,
-                                size: 64,
-                                color: _gold,
+                      if (_hasLocation) ...[
+                        // Kaaba marker fixed on the OUTER ring at the Qibla bearing
+                        AnimatedRotation(
+                          turns: _needleAngle / (2 * math.pi),
+                          duration: const Duration(milliseconds: 150),
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: _aligned ? _gold : _navy,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: activeColor.withOpacity(0.5),
+                                    blurRadius: _aligned ? 12 : 4,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 2),
-                              const Text('🕋',
-                                  style: TextStyle(fontSize: 22)),
-                            ],
+                              child: const Text('🕋',
+                                  style: TextStyle(fontSize: 20)),
+                            ),
                           ),
                         ),
 
+                        // Central arrow — points to the Kaaba, gold when aligned
+                        AnimatedRotation(
+                          turns: _needleAngle / (2 * math.pi),
+                          duration: const Duration(milliseconds: 150),
+                          child: Icon(
+                            Icons.navigation,
+                            size: 70,
+                            color: activeColor,
+                          ),
+                        ),
+                      ],
+
                       // Center pivot dot
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 400),
+                      Container(
                         width: 14,
                         height: 14,
                         decoration: BoxDecoration(
-                          color: _hasLocation ? _gold : cs.primary,
+                          color: activeColor,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: (_hasLocation ? _gold : cs.primary)
-                                  .withOpacity(0.5),
-                              blurRadius: 6,
-                            ),
+                                color: activeColor.withOpacity(0.5),
+                                blurRadius: 6),
                           ],
                         ),
                       ),
@@ -215,24 +285,23 @@ class _QiblaPageState extends State<QiblaPage> {
 
               const SizedBox(height: 28),
 
-              // Aligned confirmation banner
+              // Status banner: aligned / angle / nothing
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 350),
-                child: aligned
+                child: _aligned
                     ? Container(
                         key: const ValueKey('aligned'),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 10),
                         decoration: BoxDecoration(
-                          color: _gold.withOpacity(0.12),
+                          color: _gold.withOpacity(0.14),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(color: _gold, width: 1.5),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.check_circle,
-                                color: _gold, size: 20),
+                            Icon(Icons.check_circle, color: _gold, size: 20),
                             SizedBox(width: 8),
                             Text(
                               'أنت متجه نحو القبلة',
@@ -286,7 +355,7 @@ class _QiblaPageState extends State<QiblaPage> {
                     color: cs.onSurface.withOpacity(0.55), fontSize: 13),
               ),
 
-              if (!_hasLocation) ...[
+              if (!_hasLocation && !_noCompass) ...[
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
                   onPressed: _getLocation,
@@ -302,13 +371,11 @@ class _QiblaPageState extends State<QiblaPage> {
   }
 
   String _distToMecca() {
-    const bagLat = 33.3152;
-    const bagLon = 44.3661;
     const r = 6371.0;
-    const lat1 = bagLat * math.pi / 180;
+    final lat1 = _userLat * math.pi / 180;
     const lat2 = _kaabaLat * math.pi / 180;
-    const dLat = (bagLat - _kaabaLat) * math.pi / 180;
-    const dLon = (bagLon - _kaabaLon) * math.pi / 180;
+    final dLat = (_userLat - _kaabaLat) * math.pi / 180;
+    final dLon = (_userLon - _kaabaLon) * math.pi / 180;
     final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(lat1) *
             math.cos(lat2) *
@@ -323,20 +390,23 @@ class _QiblaPageState extends State<QiblaPage> {
 class _CompassPainter extends CustomPainter {
   final double heading;
   final ColorScheme cs;
-  final bool isLocated;
+  final bool aligned;
+  final bool located;
   static const Color _gold = Color(0xFFC9A843);
+  static const Color _navy = Color(0xFF1B3D6F);
 
   _CompassPainter({
     required this.heading,
     required this.cs,
-    required this.isLocated,
+    required this.aligned,
+    required this.located,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2 - 10;
-    final ringColor = isLocated ? _gold : cs.primary;
+    final ringColor = aligned ? _gold : (located ? _navy : cs.primary);
 
     // Background fill
     canvas.drawCircle(
@@ -352,9 +422,9 @@ class _CompassPainter extends CustomPainter {
       center,
       radius,
       Paint()
-        ..color = ringColor.withOpacity(isLocated ? 0.75 : 0.35)
+        ..color = ringColor.withOpacity(aligned ? 0.9 : 0.5)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = isLocated ? 3 : 2,
+        ..strokeWidth = aligned ? 4 : 2.5,
     );
 
     // Inner decorative ring
@@ -397,20 +467,19 @@ class _CompassPainter extends CustomPainter {
         ..text = TextSpan(
           text: dirs[i],
           style: TextStyle(
-            color: i == 0
-                ? Colors.red
-                : (isLocated ? _gold : cs.onSurface),
+            color: i == 0 ? Colors.red : (aligned ? _gold : cs.onSurface),
             fontSize: 15,
             fontWeight: FontWeight.bold,
           ),
         )
         ..layout();
-      tp.paint(canvas,
-          Offset(x - tp.width / 2, y - tp.height / 2));
+      tp.paint(canvas, Offset(x - tp.width / 2, y - tp.height / 2));
     }
   }
 
   @override
   bool shouldRepaint(_CompassPainter old) =>
-      old.heading != heading || old.isLocated != isLocated;
+      old.heading != heading ||
+      old.aligned != aligned ||
+      old.located != located;
 }
