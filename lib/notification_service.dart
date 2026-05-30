@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -10,7 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('Background message: ${message.notification?.title}');
+  debugPrint('Background FCM: ${message.notification?.title}');
 }
 
 class NotificationService {
@@ -20,6 +21,10 @@ class NotificationService {
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
+
+  // Navigation stream — emits page keys like 'events', 'announcements', 'prayer'
+  static final _navController = StreamController<String>.broadcast();
+  static Stream<String> get navStream => _navController.stream;
 
   static const _prayerOrder = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
   static const _prayerNames = {
@@ -36,6 +41,7 @@ class NotificationService {
     await _initLocal();
     await _requestPermissions();
     _listenForeground();
+    await _setupTapHandlers();
     await _subscribeTopics();
     _logToken();
     await schedulePrayerNotifications();
@@ -58,24 +64,42 @@ class NotificationService {
       requestBadgePermission: false,
       requestSoundPermission: false,
     );
-    await _local.initialize(const InitializationSettings(android: android, iOS: ios));
 
-    const channel = AndroidNotificationChannel(
+    await _local.initialize(
+      const InitializationSettings(android: android, iOS: ios),
+      onDidReceiveNotificationResponse: (response) {
+        final page = response.payload;
+        if (page != null && page.isNotEmpty) _navController.add(page);
+      },
+    );
+
+    // Channel for push announcements (matches AndroidManifest default)
+    const announcementsChannel = AndroidNotificationChannel(
+      'announcements',
+      'الإعلانات',
+      description: 'إعلانات وأخبار المسجد',
+      importance: Importance.high,
+    );
+
+    // Channel for scheduled prayer times
+    const prayerChannel = AndroidNotificationChannel(
       'prayer_times',
       'أوقات الصلاة',
       description: 'تنبيهات مواعيد الصلاة اليومية',
       importance: Importance.high,
     );
-    await _local
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+
+    final androidImpl =
+        _local.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidImpl?.createNotificationChannel(announcementsChannel);
+    await androidImpl?.createNotificationChannel(prayerChannel);
   }
 
   Future<void> _requestPermissions() async {
     await _messaging.requestPermission(alert: true, badge: true, sound: true);
     await _local
         .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(alert: true, badge: false, sound: true);
+        ?.requestPermissions(alert: true, badge: true, sound: true);
     await _local
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
@@ -84,10 +108,57 @@ class NotificationService {
         ?.requestExactAlarmsPermission();
   }
 
+  // Shows FCM notifications when the app is open in the foreground.
   void _listenForeground() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('Foreground FCM: ${message.notification?.title}');
+      final notif = message.notification;
+      if (notif == null) return;
+
+      final page = message.data['page']?.toString() ?? '';
+      _local.show(
+        message.hashCode,
+        notif.title,
+        notif.body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'announcements',
+            'الإعلانات',
+            channelDescription: 'إعلانات وأخبار المسجد',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: page,
+      );
     });
+  }
+
+  // Handles notification taps that open or resume the app.
+  Future<void> _setupTapHandlers() async {
+    // App resumed from background by tapping a notification
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      _handleNavigation(message.data);
+    });
+
+    // App launched from terminated state by tapping a notification
+    final initial = await FirebaseMessaging.instance.getInitialMessage();
+    if (initial != null) {
+      // Small delay to ensure the widget tree is ready
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _handleNavigation(initial.data);
+      });
+    }
+  }
+
+  void _handleNavigation(Map<String, dynamic> data) {
+    final page = data['page']?.toString();
+    if (page != null && page.isNotEmpty) _navController.add(page);
   }
 
   Future<void> _subscribeTopics() async {
@@ -106,14 +177,17 @@ class NotificationService {
     }
   }
 
-  // Schedules prayer notifications for the next 7 days based on stored prefs.
+  // Schedules local prayer notifications for the next 7 days.
   Future<void> schedulePrayerNotifications() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = await rootBundle.loadString('assets/prayer_times_2026.json');
       final allTimes = json.decode(raw) as Map<String, dynamic>;
 
-      await _local.cancelAll();
+      // Cancel only prayer-time notifications (IDs 0–69), keep push ones
+      for (int i = 0; i < 70; i++) {
+        await _local.cancel(i);
+      }
 
       final now = tz.TZDateTime.now(tz.local);
 

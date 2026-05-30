@@ -207,6 +207,7 @@ class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
   // Pages are built lazily — only when first visited
   final Map<int, Widget> _pageCache = {};
+  StreamSubscription<String>? _navSub;
 
   static const _pageBuilders = [
     HomePage.new,
@@ -217,8 +218,35 @@ class _MainShellState extends State<MainShell> {
     MorePage.new,
   ];
 
-  Widget _page(int i) => _pageCache.putIfAbsent(
-      i, () => _pageBuilders[i]());
+  // Maps FCM data['page'] values to tab indices
+  static const _pageIndexMap = {
+    'home': 0,
+    'quran': 1,
+    'prayer': 2,
+    'social': 3,
+    'events': 4,
+    'more': 5,
+    'announcements': 5,
+    'mafatih': 5,
+    'ziyarat': 5,
+  };
+
+  Widget _page(int i) => _pageCache.putIfAbsent(i, () => _pageBuilders[i]());
+
+  @override
+  void initState() {
+    super.initState();
+    _navSub = NotificationService.navStream.listen((page) {
+      final idx = _pageIndexMap[page];
+      if (idx != null && mounted) setState(() => _currentIndex = idx);
+    });
+  }
+
+  @override
+  void dispose() {
+    _navSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
