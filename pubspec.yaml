@@ -42,6 +42,8 @@ dependencies:
   # Storage & State
   shared_preferences: ^2.2.2
   provider: ^6.1.1
+  path_provider: ^2.1.2
+  http: ^1.2.1
 
   # URL Launcher — opens social media links
   url_launcher: ^6.2.5

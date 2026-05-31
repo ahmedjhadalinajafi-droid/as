@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:audio_session/audio_session.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'islamic_background.dart';
 
 // ─── Models ──────────────────────────────────────────────────────────────────
@@ -76,6 +79,105 @@ Future<List<Verse>> loadVerses(int surahId) async {
   return verses;
 }
 
+// ─── Audio Download Manager ───────────────────────────────────────────────────
+
+/// Singleton that manages local caching of surah audio files.
+/// - cached     → plays from device storage (offline)
+/// - not cached → streams from Firebase Storage
+class QuranAudioCache extends ChangeNotifier {
+  QuranAudioCache._();
+  static final QuranAudioCache instance = QuranAudioCache._();
+
+  Directory? _dir;
+
+  // download progress per surah id: null = not downloading, 0..1 = in progress
+  final Map<int, double> _progress = {};
+
+  // surah ids that are fully downloaded
+  final Set<int> _cached = {};
+
+  // active download futures to prevent double-downloads
+  final Map<int, Future<void>> _active = {};
+
+  Future<void> init() async {
+    final base = await getApplicationDocumentsDirectory();
+    _dir = Directory('${base.path}/quran_audio');
+    await _dir!.create(recursive: true);
+    // scan what is already on disk
+    await _dir!.list().forEach((e) {
+      if (e is File && e.path.endsWith('.mp3')) {
+        final name = e.uri.pathSegments.last;
+        final id = int.tryParse(name.replaceAll('.mp3', ''));
+        if (id != null) _cached.add(id);
+      }
+    });
+    notifyListeners();
+  }
+
+  bool isCached(int id) => _cached.contains(id);
+  double? progress(int id) => _progress[id];
+  bool isDownloading(int id) => _progress.containsKey(id);
+
+  File _file(int id) => File('${_dir!.path}/$id.mp3');
+
+  /// Returns a local file path if cached, otherwise null.
+  String? localPath(int id) => isCached(id) ? _file(id).path : null;
+
+  Future<void> download(int id) async {
+    if (isCached(id) || isDownloading(id)) return;
+    _active[id] = _doDownload(id);
+    await _active[id];
+    _active.remove(id);
+  }
+
+  Future<void> _doDownload(int id) async {
+    try {
+      _progress[id] = 0;
+      notifyListeners();
+
+      // 1. Resolve Firebase Storage URL
+      final ref = FirebaseStorage.instance.ref('quran_audio/$id.mp3');
+      final url = await ref.getDownloadURL();
+
+      // 2. Stream-download with progress
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await request.send();
+      final total = response.contentLength ?? 0;
+      int received = 0;
+
+      final file = _file(id);
+      final sink = file.openWrite();
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total > 0) {
+          _progress[id] = received / total;
+          notifyListeners();
+        }
+      }
+      await sink.flush();
+      await sink.close();
+
+      _cached.add(id);
+      _progress.remove(id);
+      notifyListeners();
+    } catch (_) {
+      _progress.remove(id);
+      final f = _file(id);
+      if (await f.exists()) await f.delete();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> delete(int id) async {
+    final f = _file(id);
+    if (await f.exists()) await f.delete();
+    _cached.remove(id);
+    notifyListeners();
+  }
+}
+
 // ─── Surah List Page ─────────────────────────────────────────────────────────
 
 class QuranPage extends StatefulWidget {
@@ -90,21 +192,29 @@ class _QuranPageState extends State<QuranPage> {
   List<Surah> _filtered = [];
   bool _loading = true;
   final _search = TextEditingController();
+  final _cache = QuranAudioCache.instance;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _init();
     _search.addListener(_filter);
+    _cache.addListener(_onCacheChange);
   }
 
   @override
   void dispose() {
     _search.dispose();
+    _cache.removeListener(_onCacheChange);
     super.dispose();
   }
 
-  Future<void> _load() async {
+  void _onCacheChange() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _init() async {
+    await _cache.init();
     try {
       await _ensureLoaded();
       final surahs = _rawQuranData!
@@ -117,7 +227,7 @@ class _QuranPageState extends State<QuranPage> {
           _loading = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -140,58 +250,39 @@ class _QuranPageState extends State<QuranPage> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return IslamicPatternBackground(
-      child: Scaffold( backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('القرآن الكريم')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _search,
-              textDirection: TextDirection.rtl,
-              decoration: InputDecoration(
-                hintText: 'ابحث عن سورة...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(title: const Text('القرآن الكريم')),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _search,
+                textDirection: TextDirection.rtl,
+                decoration: InputDecoration(
+                  hintText: 'ابحث عن سورة...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  isDense: true,
                 ),
-                isDense: true,
               ),
             ),
-          ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _filtered.isEmpty
-                    ? const Center(child: Text('لا توجد نتائج'))
-                    : ListView.builder(
-                        itemCount: _filtered.length,
-                        itemBuilder: (ctx, i) {
-                          final s = _filtered[i];
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: cs.primary.withOpacity(0.1),
-                              child: Text(
-                                '${s.id}',
-                                style: TextStyle(
-                                  color: cs.primary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            title: Text(
-                              s.name,
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                              '${s.nameEn}  •  ${s.versesCount} آية  •  ${s.type == 'meccan' ? 'مكية' : 'مدنية'}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            trailing: const Icon(Icons.chevron_left),
-                            onTap: () {
-                              Navigator.push(
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filtered.isEmpty
+                      ? const Center(child: Text('لا توجد نتائج'))
+                      : ListView.builder(
+                          itemCount: _filtered.length,
+                          itemBuilder: (ctx, i) {
+                            final s = _filtered[i];
+                            return _SurahTile(
+                              surah: s,
+                              cache: _cache,
+                              onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => SurahReaderPage(
@@ -199,15 +290,135 @@ class _QuranPageState extends State<QuranPage> {
                                     initialIndex: _surahs.indexOf(s),
                                   ),
                                 ),
-                              );
-                            },
-                          );
-                        },
-                      ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Surah Tile with download button ─────────────────────────────────────────
+
+class _SurahTile extends StatelessWidget {
+  final Surah surah;
+  final QuranAudioCache cache;
+  final VoidCallback onTap;
+  const _SurahTile(
+      {required this.surah, required this.cache, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final cached = cache.isCached(surah.id);
+    final downloading = cache.isDownloading(surah.id);
+    final prog = cache.progress(surah.id) ?? 0.0;
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: cs.primary.withOpacity(0.1),
+        child: Text(
+          '${surah.id}',
+          style: TextStyle(
+              color: cs.primary, fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+      ),
+      title: Text(
+        surah.name,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${surah.nameEn}  •  ${surah.versesCount} آية  •  ${surah.type == 'meccan' ? 'مكية' : 'مدنية'}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (downloading)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: LinearProgressIndicator(
+                value: prog,
+                minHeight: 3,
+                borderRadius: BorderRadius.circular(2),
+                color: cs.primary,
+                backgroundColor: cs.primary.withOpacity(0.15),
+              ),
+            ),
+        ],
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Download / cached / progress button
+          if (downloading)
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                      value: prog, strokeWidth: 2.5, color: cs.primary),
+                  Icon(Icons.download, size: 14, color: cs.primary),
+                ],
+              ),
+            )
+          else if (cached)
+            IconButton(
+              tooltip: 'محفوظ — اضغط لحذف',
+              icon: const Icon(Icons.download_done_rounded),
+              color: Colors.green,
+              onPressed: () => _confirmDelete(context),
+            )
+          else
+            IconButton(
+              tooltip: 'تحميل للاستماع بلا إنترنت',
+              icon: Icon(Icons.download_outlined, color: cs.primary),
+              onPressed: () => _startDownload(context),
+            ),
+          const Icon(Icons.chevron_left),
+        ],
+      ),
+      onTap: onTap,
+    );
+  }
+
+  void _startDownload(BuildContext context) async {
+    try {
+      await cache.download(surah.id);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل تحميل ${surah.name}')),
+        );
+      }
+    }
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('حذف ${surah.name}'),
+        content: const Text('هل تريد حذف الملف المحفوظ؟'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              cache.delete(surah.id);
+            },
+            child: const Text('حذف', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
-    ),
     );
   }
 }
@@ -373,15 +584,15 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
 
   Surah get _current => widget.surahs[_currentIndex];
 
-  // Cache of resolved Firebase Storage download URLs, keyed by surah id,
-  // so we only hit Storage once per surah.
+  // In-memory cache of resolved Firebase Storage download URLs per surah id.
   static final Map<int, String> _urlCache = {};
 
-  // Recitation by الشيخ أحمد الدباغ.
-  // Audio files live in Firebase Storage under  quran_audio/<surah>.mp3
-  // (named 1.mp3 … 114.mp3 to match the surah number).
+  // Returns a local file:// URI if the surah is cached on device,
+  // otherwise resolves the Firebase Storage download URL.
   Future<String> _resolveAudioUrl() async {
     final id = _current.id;
+    final localPath = QuranAudioCache.instance.localPath(id);
+    if (localPath != null) return localPath;
     final cached = _urlCache[id];
     if (cached != null) return cached;
     final ref = FirebaseStorage.instance.ref('quran_audio/$id.mp3');
