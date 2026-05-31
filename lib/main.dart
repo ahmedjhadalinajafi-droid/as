@@ -138,13 +138,6 @@ class MasjidApp extends StatelessWidget {
         tertiary: isDark ? navy : gold,
       ),
       fontFamily: 'ScheherazadeNew',
-      // Smooth, consistent slide transitions on every platform
-      pageTransitionsTheme: PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        },
-      ),
       splashFactory: InkSparkle.splashFactory,
       appBarTheme: AppBarTheme(
         centerTitle: true,
