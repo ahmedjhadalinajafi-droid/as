@@ -166,6 +166,7 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
         ],
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 100),
         child: Column(
           children: [
             // ── Month header ─────────────────────────────────────────

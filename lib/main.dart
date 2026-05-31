@@ -214,7 +214,6 @@ class _MainShellState extends State<MainShell> {
 
   static const _pageBuilders = [
     HomePage.new,
-    QuranPage.new,
     PrayerTimesPage.new,
     SocialMediaPage.new,
     EventsPage.new,
@@ -225,15 +224,15 @@ class _MainShellState extends State<MainShell> {
   // Maps FCM data['page'] values to tab indices
   static const _pageIndexMap = {
     'home': 0,
-    'quran': 1,
-    'prayer': 2,
-    'social': 3,
-    'events': 4,
-    'campaigns': 5,
-    'more': 6,
-    'announcements': 6,
-    'mafatih': 6,
-    'ziyarat': 6,
+    'prayer': 1,
+    'social': 2,
+    'events': 3,
+    'campaigns': 4,
+    'more': 5,
+    'announcements': 5,
+    'mafatih': 5,
+    'ziyarat': 5,
+    'quran': 5,
   };
 
   Widget _page(int i) => _pageCache.putIfAbsent(i, () => _pageBuilders[i]());
@@ -304,7 +303,6 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
     with TickerProviderStateMixin {
   static const _items = [
     _NavItem(icon: Icons.home_outlined,       selectedIcon: Icons.home_rounded,         label: 'الرئيسية'),
-    _NavItem(icon: Icons.menu_book_outlined,  selectedIcon: Icons.menu_book_rounded,    label: 'القرآن'),
     _NavItem(icon: Icons.access_time_outlined,selectedIcon: Icons.access_time_filled,   label: 'الصلاة'),
     _NavItem(icon: Icons.people_outline,      selectedIcon: Icons.people_rounded,       label: 'تواصل'),
     _NavItem(icon: Icons.event_outlined,      selectedIcon: Icons.event_rounded,        label: 'الفعاليات'),
@@ -1447,6 +1445,12 @@ class MorePage extends StatelessWidget {
 
     final items = [
       _MoreItem(
+        icon: Icons.menu_book_rounded,
+        label: 'القرآن الكريم',
+        color: const Color(0xFF1B7A4B),
+        page: const QuranPage(),
+      ),
+      _MoreItem(
         icon: Icons.event_rounded,
         label: 'الفعاليات',
         color: const Color(0xFF9C27B0),
@@ -1510,7 +1514,7 @@ class MorePage extends StatelessWidget {
         ),
         body: GridView.count(
           crossAxisCount: 2,
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
           children: items

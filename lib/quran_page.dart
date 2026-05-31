@@ -834,7 +834,7 @@ class _SurahContent extends StatefulWidget {
 
 class _SurahContentState extends State<_SurahContent> {
   List<Verse>? _verses;
-  final Map<int, GlobalKey> _keys = {};
+  final ScrollController _scroll = ScrollController();
 
   @override
   void initState() {
@@ -845,29 +845,48 @@ class _SurahContentState extends State<_SurahContent> {
   @override
   void didUpdateWidget(_SurahContent old) {
     super.didUpdateWidget(old);
-    if (old.surah.id != widget.surah.id) {
-      _keys.clear();
-      _load();
-    }
-    // Auto-scroll to keep the reciting ayah comfortably in view.
+    if (old.surah.id != widget.surah.id) _load();
+    // Keep the reciting ayah in view (proportional auto-scroll).
     if (widget.activeAyah != null && widget.activeAyah != old.activeAyah) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final ctx = _keys[widget.activeAyah]?.currentContext;
-        if (ctx != null) {
-          Scrollable.ensureVisible(
-            ctx,
-            alignment: 0.35,
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeInOut,
-          );
-        }
-      });
+      _scrollToActive();
     }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
     final verses = await loadVerses(widget.surah.id);
     if (mounted) setState(() => _verses = verses);
+  }
+
+  // Estimate the active ayah's position from its cumulative share of the
+  // surah's letters and scroll it toward the upper third of the screen.
+  void _scrollToActive() {
+    final verses = _verses;
+    final active = widget.activeAyah;
+    if (verses == null || active == null) return;
+    int total = 0;
+    int before = 0;
+    for (final v in verses) {
+      final len = v.text.length;
+      if (v.id < active) before += len;
+      total += len;
+    }
+    if (total == 0) return;
+    final frac = before / total;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      final target = _scroll.position.maxScrollExtent * frac - 80;
+      _scroll.animateTo(
+        target.clamp(0.0, _scroll.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   @override
@@ -879,8 +898,32 @@ class _SurahContentState extends State<_SurahContent> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final baseStyle = TextStyle(
+      fontFamily: 'ScheherazadeNew',
+      fontSize: widget.fontSize,
+      height: 2.2,
+      color: cs.onSurface,
+    );
+    final highlightBg = cs.primary.withOpacity(isDark ? 0.34 : 0.16);
+
+    // One flowing paragraph; the reciting ayah is highlighted inline.
+    final spans = <TextSpan>[
+      for (final v in _verses!)
+        TextSpan(
+          text: '${v.text} ﴿${v.id}﴾  ',
+          style: widget.activeAyah == v.id
+              ? baseStyle.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w600,
+                  background: Paint()..color = highlightBg,
+                )
+              : baseStyle,
+        ),
+    ];
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      controller: _scroll,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -920,65 +963,14 @@ class _SurahContentState extends State<_SurahContent> {
               ],
             ),
           ),
-          // One highlightable block per ayah
-          for (final v in _verses!)
-            _AyahBlock(
-              key: _keys.putIfAbsent(v.id, () => GlobalKey()),
-              verse: v,
-              fontSize: widget.fontSize,
-              active: widget.activeAyah == v.id,
-              isDark: isDark,
-            ),
+          // Continuous flowing text — true straight-line Mushaf style
+          Text.rich(
+            TextSpan(children: spans),
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.justify,
+          ),
           const SizedBox(height: 40),
         ],
-      ),
-    );
-  }
-}
-
-// A single ayah; turns gold/tinted while it is being recited.
-class _AyahBlock extends StatelessWidget {
-  final Verse verse;
-  final double fontSize;
-  final bool active;
-  final bool isDark;
-  const _AyahBlock({
-    super.key,
-    required this.verse,
-    required this.fontSize,
-    required this.active,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 1),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: active
-            ? cs.primary.withOpacity(isDark ? 0.30 : 0.13)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        border: active
-            ? Border.all(color: cs.primary.withOpacity(0.45))
-            : null,
-      ),
-      child: Text(
-        '${verse.text} ﴿${verse.id}﴾',
-        textDirection: TextDirection.rtl,
-        textAlign: TextAlign.justify,
-        style: TextStyle(
-          fontFamily: 'ScheherazadeNew',
-          fontSize: fontSize,
-          height: 2.1,
-          color: active ? cs.primary : cs.onSurface,
-          fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-        ),
       ),
     );
   }

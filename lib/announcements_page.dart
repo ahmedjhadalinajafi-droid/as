@@ -55,7 +55,7 @@ class AnnouncementsPage extends StatelessWidget {
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
             itemCount: docs.length,
             itemBuilder: (ctx, i) {
               final data = docs[i].data() as Map<String, dynamic>;

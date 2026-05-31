@@ -177,7 +177,8 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                // extra bottom padding so the last rows clear the floating nav bar
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
                 children: [
                   // Date header
                   _DateHeader(),

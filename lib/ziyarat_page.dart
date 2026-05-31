@@ -340,7 +340,7 @@ class ZiyaratPage extends StatelessWidget {
       child: Scaffold( backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('الزيارات والمناسبات')),
       body: ListView.builder(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
         itemCount: _ziyarat.length,
         itemBuilder: (ctx, i) {
           final z = _ziyarat[i];
