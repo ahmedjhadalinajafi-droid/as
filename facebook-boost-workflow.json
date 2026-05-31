@@ -1,0 +1,394 @@
+{
+  "name": "Facebook Daily Post Boost",
+  "nodes": [
+    {
+      "id": "node-trigger",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [80, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [280, 300],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "PAGE_ID",
+              "type": "stringValue",
+              "stringValue": "REPLACE_WITH_YOUR_PAGE_ID"
+            },
+            {
+              "name": "AD_ACCOUNT_ID",
+              "type": "stringValue",
+              "stringValue": "REPLACE_WITH_YOUR_AD_ACCOUNT_ID"
+            },
+            {
+              "name": "ACCESS_TOKEN",
+              "type": "stringValue",
+              "stringValue": "REPLACE_WITH_YOUR_PAGE_ACCESS_TOKEN"
+            },
+            {
+              "name": "DAILY_BUDGET_CENTS",
+              "type": "numberValue",
+              "numberValue": 500
+            },
+            {
+              "name": "BOOST_DAYS",
+              "type": "numberValue",
+              "numberValue": 1
+            },
+            {
+              "name": "COUNTRY_CODE",
+              "type": "stringValue",
+              "stringValue": "US"
+            },
+            {
+              "name": "AGE_MIN",
+              "type": "numberValue",
+              "numberValue": 18
+            },
+            {
+              "name": "AGE_MAX",
+              "type": "numberValue",
+              "numberValue": 65
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-get-post",
+      "name": "Get Latest Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v19.0/{{ $('Config').first().json.PAGE_ID }}/posts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $('Config').first().json.ACCESS_TOKEN }}"
+            },
+            {
+              "name": "fields",
+              "value": "id,message,created_time,permalink_url"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-check",
+      "name": "Post Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.data.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-no-post",
+      "name": "No Post Today",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 440],
+      "parameters": {}
+    },
+    {
+      "id": "node-campaign",
+      "name": "Create Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/act_{{ $('Config').first().json.AD_ACCOUNT_ID }}/campaigns",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "=Daily Boost - {{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "objective",
+              "value": "OUTCOME_ENGAGEMENT"
+            },
+            {
+              "name": "status",
+              "value": "ACTIVE"
+            },
+            {
+              "name": "special_ad_categories",
+              "value": "[]"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Config').first().json.ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-adset",
+      "name": "Create Ad Set",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/act_{{ $('Config').first().json.AD_ACCOUNT_ID }}/adsets",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "=Ad Set - {{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "campaign_id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "daily_budget",
+              "value": "={{ $('Config').first().json.DAILY_BUDGET_CENTS }}"
+            },
+            {
+              "name": "bid_strategy",
+              "value": "LOWEST_COST_WITHOUT_CAP"
+            },
+            {
+              "name": "billing_event",
+              "value": "IMPRESSIONS"
+            },
+            {
+              "name": "optimization_goal",
+              "value": "POST_ENGAGEMENT"
+            },
+            {
+              "name": "start_time",
+              "value": "={{ $now.toUnixInteger() }}"
+            },
+            {
+              "name": "end_time",
+              "value": "={{ $now.plus({ days: $('Config').first().json.BOOST_DAYS }).toUnixInteger() }}"
+            },
+            {
+              "name": "targeting",
+              "value": "={{ JSON.stringify({ geo_locations: { countries: [$('Config').first().json.COUNTRY_CODE] }, age_min: $('Config').first().json.AGE_MIN, age_max: $('Config').first().json.AGE_MAX }) }}"
+            },
+            {
+              "name": "status",
+              "value": "ACTIVE"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Config').first().json.ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-creative",
+      "name": "Create Ad Creative",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/act_{{ $('Config').first().json.AD_ACCOUNT_ID }}/adcreatives",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "=Creative - {{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "object_story_id",
+              "value": "={{ $('Get Latest Post').first().json.data[0].id }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Config').first().json.ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-ad",
+      "name": "Create Ad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1480, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/act_{{ $('Config').first().json.AD_ACCOUNT_ID }}/ads",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "=Boosted Post - {{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "adset_id",
+              "value": "={{ $('Create Ad Set').first().json.id }}"
+            },
+            {
+              "name": "creative",
+              "value": "={{ JSON.stringify({ creative_id: $json.id }) }}"
+            },
+            {
+              "name": "status",
+              "value": "ACTIVE"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Config').first().json.ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-done",
+      "name": "Boost Created",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1680, 160],
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "status",
+              "type": "stringValue",
+              "stringValue": "success"
+            },
+            {
+              "name": "ad_id",
+              "type": "stringValue",
+              "stringValue": "={{ $json.id }}"
+            },
+            {
+              "name": "boosted_post_id",
+              "type": "stringValue",
+              "stringValue": "={{ $('Get Latest Post').first().json.data[0].id }}"
+            },
+            {
+              "name": "date",
+              "type": "stringValue",
+              "stringValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [{"node": "Config", "type": "main", "index": 0}]
+      ]
+    },
+    "Config": {
+      "main": [
+        [{"node": "Get Latest Post", "type": "main", "index": 0}]
+      ]
+    },
+    "Get Latest Post": {
+      "main": [
+        [{"node": "Post Exists?", "type": "main", "index": 0}]
+      ]
+    },
+    "Post Exists?": {
+      "main": [
+        [{"node": "Create Campaign", "type": "main", "index": 0}],
+        [{"node": "No Post Today", "type": "main", "index": 0}]
+      ]
+    },
+    "Create Campaign": {
+      "main": [
+        [{"node": "Create Ad Set", "type": "main", "index": 0}]
+      ]
+    },
+    "Create Ad Set": {
+      "main": [
+        [{"node": "Create Ad Creative", "type": "main", "index": 0}]
+      ]
+    },
+    "Create Ad Creative": {
+      "main": [
+        [{"node": "Create Ad", "type": "main", "index": 0}]
+      ]
+    },
+    "Create Ad": {
+      "main": [
+        [{"node": "Boost Created", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
