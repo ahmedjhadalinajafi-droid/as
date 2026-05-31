@@ -847,11 +847,15 @@ class _HomePageState extends State<HomePage> {
             sublabel: 'The Holy Quran',
             color: const Color(0xFF1B3D6F),
             bg: cardBg,
-            onTap: () {
-              // Switch to Quran tab (index 1) via MainShell
-              final shell = context.findAncestorStateOfType<_MainShellState>();
-              shell?.setState(() => shell._currentIndex = 1);
-            },
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: QuranPage(),
+                ),
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -864,7 +868,7 @@ class _HomePageState extends State<HomePage> {
             bg: cardBg,
             onTap: () {
               final shell = context.findAncestorStateOfType<_MainShellState>();
-              shell?.setState(() => shell._currentIndex = 2);
+              shell?.setState(() => shell._currentIndex = 1);
             },
           ),
         ),
