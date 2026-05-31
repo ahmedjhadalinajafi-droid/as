@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:audio_session/audio_session.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -134,9 +135,10 @@ class QuranAudioCache extends ChangeNotifier {
       _progress[id] = 0;
       notifyListeners();
 
-      // Stream-download from home server with progress
-      const base = 'http://192.168.68.115/quran';
-      final request = http.Request('GET', Uri.parse('$base/$id.mp3'));
+      // Resolve Firebase Storage URL, then stream-download with progress
+      final ref = FirebaseStorage.instance.ref('quran_audio/$id.mp3');
+      final url = await ref.getDownloadURL();
+      final request = http.Request('GET', Uri.parse(url));
       final response = await request.send();
       final total = response.contentLength ?? 0;
       int received = 0;
@@ -498,19 +500,18 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
     });
   }
 
-  // Per-ayah start times (seconds) hosted at  http://<server>/quran/<surah>.json
-  // as a JSON array, e.g. [0, 4.8, 11.2, ...]. Returns null if absent/unreachable.
+  // Per-ayah start times (seconds) stored at  quran_audio/<surah>.json
+  // as a JSON array, e.g. [0, 4.8, 11.2, ...]. Returns null if absent.
   Future<List<double>?> _loadTimings(int id) async {
     if (_timingsCache.containsKey(id)) return _timingsCache[id];
     try {
-      const base = 'http://192.168.68.115/quran';
-      final res = await http.get(Uri.parse('$base/$id.json'))
-          .timeout(const Duration(seconds: 5));
-      if (res.statusCode != 200) {
+      final ref = FirebaseStorage.instance.ref('quran_audio/$id.json');
+      final bytes = await ref.getData(2 * 1024 * 1024);
+      if (bytes == null) {
         _timingsCache[id] = null;
         return null;
       }
-      final decoded = json.decode(res.body);
+      final decoded = json.decode(utf8.decode(bytes));
       List<double>? starts;
       if (decoded is List) {
         starts = decoded.map((e) => (e as num).toDouble()).toList();
@@ -581,17 +582,21 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
 
   Surah get _current => widget.surahs[_currentIndex];
 
-  // Base URL of the home server hosting the Quran audio files.
-  // Files are served at: http://<server>/quran/<surah>.mp3
-  static const _audioBase = 'http://192.168.68.115/quran';
+  // In-memory cache of resolved Firebase Storage download URLs per surah id.
+  static final Map<int, String> _urlCache = {};
 
   // Returns a local file path if the surah is cached on device,
-  // otherwise returns the home server stream URL directly.
+  // otherwise resolves the Firebase Storage download URL (quran_audio/<n>.mp3).
   Future<String> _resolveAudioUrl() async {
     final id = _current.id;
     final localPath = QuranAudioCache.instance.localPath(id);
     if (localPath != null) return localPath;
-    return '$_audioBase/$id.mp3';
+    final cached = _urlCache[id];
+    if (cached != null) return cached;
+    final ref = FirebaseStorage.instance.ref('quran_audio/$id.mp3');
+    final url = await ref.getDownloadURL();
+    _urlCache[id] = url;
+    return url;
   }
 
   Future<void> _playPause() async {
