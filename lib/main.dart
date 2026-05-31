@@ -139,7 +139,7 @@ class MasjidApp extends StatelessWidget {
       ),
       fontFamily: 'ScheherazadeNew',
       // Smooth, consistent slide transitions on every platform
-      pageTransitionsTheme: const PageTransitionsTheme(
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
