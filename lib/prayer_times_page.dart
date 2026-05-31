@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -98,19 +99,49 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
 
   Future<void> _load() async {
     if (!mounted) return;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
+
+    // 1 — Try Firestore (admin-controlled times)
+    if (await _loadFromFirestore()) return;
+
+    // 2 — Fall back to aladhan.com API
+    await _loadFromApi();
+  }
+
+  Future<bool> _loadFromFirestore() async {
+    try {
+      final now = DateTime.now();
+      final start = '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
+      final end   = '${now.year}-${now.month.toString().padLeft(2, '0')}-31';
+      final snap = await FirebaseFirestore.instance
+          .collection('prayer_times')
+          .where(FieldPath.documentId(), isGreaterThanOrEqualTo: start)
+          .where(FieldPath.documentId(), isLessThanOrEqualTo: end)
+          .get()
+          .timeout(const Duration(seconds: 6));
+      if (snap.docs.isEmpty) return false;
+      final Map<String, dynamic> result = {};
+      for (final doc in snap.docs) {
+        result[doc.id] =
+            Map<String, String>.from(doc.data().map((k, v) => MapEntry(k, v.toString())));
+      }
+      if (!mounted) return true;
+      setState(() { _allTimes = result; _loading = false; });
+      _startCountdown();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _loadFromApi() async {
     final now = DateTime.now();
     try {
-      // Baghdad: lat 33.3152, lon 44.3661, method 13 = Shia Ithna-Ashari
       final uri = Uri.parse(
         'https://api.aladhan.com/v1/calendar/${now.year}/${now.month}'
         '?latitude=33.3152&longitude=44.3661&method=13',
       );
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 15));
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
       if (!mounted) return;
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body) as Map<String, dynamic>;
@@ -118,9 +149,8 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
         final Map<String, dynamic> result = {};
         for (final day in data) {
           final greg = day['date']['gregorian'];
-          final dateStr = greg['date'] as String; // "DD-MM-YYYY"
-          final p = dateStr.split('-');
-          final key = '${p[2]}-${p[1]}-${p[0]}'; // YYYY-MM-DD
+          final p = (greg['date'] as String).split('-');
+          final key = '${p[2]}-${p[1]}-${p[0]}';
           final timings = day['timings'] as Map<String, dynamic>;
           result[key] = {
             'fajr':     _stripTz(timings['Fajr']     as String? ?? ''),
@@ -131,24 +161,13 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
             'midnight': _stripTz(timings['Midnight'] as String? ?? ''),
           };
         }
-        setState(() {
-          _allTimes = result;
-          _loading = false;
-        });
+        setState(() { _allTimes = result; _loading = false; });
         _startCountdown();
       } else {
-        setState(() {
-          _loading = false;
-          _error = 'فشل تحميل البيانات (${response.statusCode})';
-        });
+        setState(() { _loading = false; _error = 'فشل تحميل البيانات (${response.statusCode})'; });
       }
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'تعذّر الاتصال بالإنترنت';
-        });
-      }
+      if (mounted) setState(() { _loading = false; _error = 'تعذّر الاتصال بالإنترنت'; });
     }
   }
 

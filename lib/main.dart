@@ -501,6 +501,34 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadPrayerTimes() async {
     if (!mounted) return;
     setState(() => _loading = true);
+
+    // 1 — Try Firestore (admin-controlled times)
+    if (await _loadTodayFromFirestore()) return;
+
+    // 2 — Fall back to aladhan.com API
+    await _loadTodayFromApi();
+  }
+
+  Future<bool> _loadTodayFromFirestore() async {
+    try {
+      final now = DateTime.now();
+      final docId =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final doc = await FirebaseFirestore.instance
+          .collection('prayer_times')
+          .doc(docId)
+          .get()
+          .timeout(const Duration(seconds: 5));
+      if (!doc.exists || doc.data() == null) return false;
+      _setPrayerTimes(
+          Map<String, String>.from(doc.data()!.map((k, v) => MapEntry(k, v.toString()))));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _loadTodayFromApi() async {
     final now = DateTime.now();
     final dateStr =
         '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
@@ -509,13 +537,10 @@ class _HomePageState extends State<HomePage> {
         'https://api.aladhan.com/v1/timings/$dateStr'
         '?latitude=33.3152&longitude=44.3661&method=13',
       );
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
-        final decoded =
-            json.decode(response.body) as Map<String, dynamic>;
-        final timings =
-            decoded['data']['timings'] as Map<String, dynamic>;
+        final decoded = json.decode(response.body) as Map<String, dynamic>;
+        final timings = decoded['data']['timings'] as Map<String, dynamic>;
         _setPrayerTimes({
           'fajr':     _stripTz(timings['Fajr']     as String? ?? ''),
           'sunrise':  _stripTz(timings['Sunrise']  as String? ?? ''),
@@ -527,7 +552,7 @@ class _HomePageState extends State<HomePage> {
         return;
       }
     } catch (e) {
-      debugPrint('Prayer times error: $e');
+      debugPrint('Prayer times API error: $e');
     }
     if (mounted) setState(() => _loading = false);
   }
