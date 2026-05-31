@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'notification_service.dart';
 import 'islamic_background.dart';
@@ -16,11 +16,14 @@ class PrayerTimesPage extends StatefulWidget {
 class _PrayerTimesPageState extends State<PrayerTimesPage> {
   Map<String, dynamic> _allTimes = {};
   bool _loading = true;
+  String? _error;
   Timer? _timer;
   String _countdown = '';
   String _nextPrayer = '';
   Map<String, bool> _notifSettings = {
-    'fajr': true, 'dhuhr': true, 'asr': true, 'maghrib': true, 'isha': true,
+    'fajr': true,
+    'dhuhr': true,
+    'isha': true,
   };
 
   static const _navy = Color(0xFF1B3D6F);
@@ -28,33 +31,26 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   static const _green = Color(0xFF4CAF50);
 
   static const _prayerNames = {
-    'fajr': 'الفجر',
-    'sunrise': 'الشروق',
-    'dhuhr': 'الظهر',
-    'asr': 'العصر',
-    'maghrib': 'المغرب',
-    'isha': 'العشاء',
-  };
-
-  static const _prayerNamesEn = {
-    'fajr': 'Morning Prayer',
-    'sunrise': 'Sunrise',
-    'dhuhr': 'Midday Prayer',
-    'asr': 'Afternoon Prayer',
-    'maghrib': 'Evening Prayer',
-    'isha': 'Night Prayer',
+    'fajr':     'الفجر',
+    'sunrise':  'الشروق',
+    'dhuhr':    'الظهر',
+    'sunset':   'الغروب',
+    'isha':     'العشاء',
+    'midnight': 'منتصف الليل',
   };
 
   static const _prayerIcons = {
-    'fajr': Icons.brightness_3,
-    'sunrise': Icons.wb_twilight,
-    'dhuhr': Icons.wb_sunny,
-    'asr': Icons.brightness_5,
-    'maghrib': Icons.brightness_4,
-    'isha': Icons.nights_stay,
+    'fajr':     Icons.brightness_3,
+    'sunrise':  Icons.wb_twilight,
+    'dhuhr':    Icons.wb_sunny,
+    'sunset':   Icons.brightness_4,
+    'isha':     Icons.nights_stay,
+    'midnight': Icons.bedtime,
   };
 
-  // Convert "HH:mm" 24h to Arabic 12h with ص/م
+  // Informational entries — no notification bell
+  static const _infoOnly = {'sunrise', 'sunset', 'midnight'};
+
   static String _toArabicTime(String t) {
     const arDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
     final parts = t.split(':');
@@ -64,10 +60,12 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     final suffix = h < 12 ? 'ص' : 'م';
     if (h == 0) h = 12;
     else if (h > 12) h -= 12;
-    String convert(int n) =>
+    String conv(int n) =>
         n.toString().split('').map((c) => arDigits[int.parse(c)]).join();
-    return '${convert(h)}:${convert(m).padLeft(2, '٠')} $suffix';
+    return '${conv(h)}:${conv(m).padLeft(2, '٠')} $suffix';
   }
+
+  static String _stripTz(String t) => t.split(' ').first;
 
   @override
   void initState() {
@@ -78,13 +76,18 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
 
   Future<void> _loadNotifSettings() async {
     final settings = await NotificationService().getNotificationSettings();
-    if (mounted) setState(() => _notifSettings = settings);
+    if (mounted) {
+      setState(() {
+        _notifSettings = Map.from(settings)
+          ..removeWhere((k, _) => !_prayerNames.containsKey(k) || _infoOnly.contains(k));
+      });
+    }
   }
 
-  Future<void> _toggleNotif(String prayerKey) async {
-    final newVal = !(_notifSettings[prayerKey] ?? true);
-    setState(() => _notifSettings[prayerKey] = newVal);
-    await NotificationService().setPrayerNotification(prayerKey, newVal);
+  Future<void> _toggleNotif(String key) async {
+    final newVal = !(_notifSettings[key] ?? true);
+    setState(() => _notifSettings[key] = newVal);
+    await NotificationService().setPrayerNotification(key, newVal);
   }
 
   @override
@@ -94,17 +97,58 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final now = DateTime.now();
     try {
-      final raw = await rootBundle.loadString('assets/prayer_times_2026.json');
-      final decoded = json.decode(raw);
+      // Baghdad: lat 33.3152, lon 44.3661, method 13 = Shia Ithna-Ashari
+      final uri = Uri.parse(
+        'https://api.aladhan.com/v1/calendar/${now.year}/${now.month}'
+        '?latitude=33.3152&longitude=44.3661&method=13',
+      );
+      final response =
+          await http.get(uri).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      setState(() {
-        _allTimes = decoded is Map ? Map<String, dynamic>.from(decoded) : {};
-        _loading = false;
-      });
-      _startCountdown();
-    } catch (e) {
-      if (mounted) setState(() => _loading = false);
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body) as Map<String, dynamic>;
+        final data = decoded['data'] as List;
+        final Map<String, dynamic> result = {};
+        for (final day in data) {
+          final greg = day['date']['gregorian'];
+          final dateStr = greg['date'] as String; // "DD-MM-YYYY"
+          final p = dateStr.split('-');
+          final key = '${p[2]}-${p[1]}-${p[0]}'; // YYYY-MM-DD
+          final timings = day['timings'] as Map<String, dynamic>;
+          result[key] = {
+            'fajr':     _stripTz(timings['Fajr']    as String? ?? ''),
+            'sunrise':  _stripTz(timings['Sunrise'] as String? ?? ''),
+            'dhuhr':    _stripTz(timings['Dhuhr']   as String? ?? ''),
+            'sunset':   _stripTz(timings['Sunset']  as String? ?? ''),
+            'isha':     _stripTz(timings['Isha']     as String? ?? ''),
+            'midnight': _stripTz(timings['Midnight'] as String? ?? ''),
+          };
+        }
+        setState(() {
+          _allTimes = result;
+          _loading = false;
+        });
+        _startCountdown();
+      } else {
+        setState(() {
+          _loading = false;
+          _error = 'فشل تحميل البيانات (${response.statusCode})';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'تعذّر الاتصال بالإنترنت';
+        });
+      }
     }
   }
 
@@ -120,6 +164,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   }
 
   void _startCountdown() {
+    _timer?.cancel();
     _updateCountdown();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _updateCountdown());
   }
@@ -127,18 +172,18 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   void _updateCountdown() {
     final times = _todayTimes;
     final now = DateTime.now();
-    const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    const order = ['fajr', 'dhuhr', 'isha'];
 
     for (final key in order) {
       final t = times[key];
-      if (t == null) continue;
+      if (t == null || t.isEmpty) continue;
       final parts = t.split(':');
       if (parts.length < 2) continue;
       final h = int.tryParse(parts[0]) ?? 0;
       final m = int.tryParse(parts[1]) ?? 0;
-      final prayerTime = DateTime(now.year, now.month, now.day, h, m);
-      if (prayerTime.isAfter(now)) {
-        final diff = prayerTime.difference(now);
+      final pTime = DateTime(now.year, now.month, now.day, h, m);
+      if (pTime.isAfter(now)) {
+        final diff = pTime.difference(now);
         final hrs = diff.inHours;
         final mins = diff.inMinutes.remainder(60);
         if (!mounted) return;
@@ -161,185 +206,203 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     final cs = Theme.of(context).colorScheme;
 
     return IslamicPatternBackground(
-      child: Scaffold( backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('أوقات الصلاة'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.today),
-            onPressed: () {},
-            tooltip: 'اليوم',
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                // extra bottom padding so the last rows clear the floating nav bar
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-                children: [
-                  // Date header
-                  _DateHeader(),
-                  const SizedBox(height: 16),
-
-                  // Countdown card
-                  if (_nextPrayer.isNotEmpty)
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [_navy, Color(0xFF2A5BA8)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('أوقات الصلاة'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _load,
+              tooltip: 'تحديث',
+            ),
+          ],
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.wifi_off_rounded, size: 52, color: cs.error),
+                        const SizedBox(height: 12),
+                        Text(_error!,
+                            style: TextStyle(color: cs.error, fontSize: 16)),
+                        const SizedBox(height: 20),
+                        ElevatedButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('إعادة المحاولة'),
                         ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _navy.withOpacity(0.4),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+                      children: [
+                        _DateHeader(),
+                        const SizedBox(height: 16),
+
+                        // ── Countdown card ──────────────────────────────
+                        if (_nextPrayer.isNotEmpty)
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [_navy, Color(0xFF2A5BA8)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _navy.withOpacity(0.4),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 18),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('الصلاة القادمة',
+                                        style: TextStyle(
+                                            color: Colors.white.withOpacity(0.7),
+                                            fontSize: 13)),
+                                    const SizedBox(height: 6),
+                                    Text(_nextPrayer,
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 26,
+                                            fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('الوقت المتبقي',
+                                        style: TextStyle(
+                                            color: Colors.white.withOpacity(0.7),
+                                            fontSize: 13)),
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(_countdown,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 1.5)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
+
+                        const SizedBox(height: 16),
+
+                        // ── Today's prayer list ─────────────────────────
+                        Container(
+                          decoration: BoxDecoration(
+                            color: cs.brightness == Brightness.dark
+                                ? const Color(0xFF0D1B2E)
+                                : const Color(0xFF1B3D6F).withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: _gold.withOpacity(0.25), width: 0.8),
+                          ),
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('الصلاة القادمة',
-                                  style: TextStyle(
-                                      color: Colors.white.withOpacity(0.7),
-                                      fontSize: 13)),
-                              const SizedBox(height: 6),
-                              Text(_nextPrayer,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('الوقت المتبقي',
-                                  style: TextStyle(
-                                      color: Colors.white.withOpacity(0.7),
-                                      fontSize: 13)),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(10),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.access_time_filled,
+                                        size: 16, color: _gold),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'أوقات الصلاة - اليوم',
+                                      style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: cs.brightness == Brightness.dark
+                                              ? Colors.white
+                                              : _navy),
+                                    ),
+                                  ],
                                 ),
-                                child: Text(_countdown,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.5)),
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  const SizedBox(height: 16),
-
-                  // Today's prayer times — dark-themed list card
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cs.brightness == Brightness.dark
-                          ? const Color(0xFF0D1B2E)
-                          : const Color(0xFF1B3D6F).withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: _gold.withOpacity(0.25), width: 0.8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                          child: Row(
-                            children: [
-                              Icon(Icons.access_time_filled,
-                                  size: 16, color: _gold),
-                              const SizedBox(width: 8),
-                              Text(
-                                'أوقات الصلاة - اليوم',
-                                style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: cs.brightness == Brightness.dark
-                                        ? Colors.white
-                                        : _navy),
-                              ),
+                              Divider(
+                                  color: _gold.withOpacity(0.2),
+                                  thickness: 0.8,
+                                  indent: 16,
+                                  endIndent: 16),
+                              ..._buildTodayRows(cs),
+                              const SizedBox(height: 8),
                             ],
                           ),
                         ),
-                        Divider(
-                            color: _gold.withOpacity(0.2),
-                            thickness: 0.8,
-                            indent: 16,
-                            endIndent: 16),
-                        ..._buildTodayRows(cs),
-                        const SizedBox(height: 8),
+
+                        const SizedBox(height: 16),
+
+                        // ── Monthly table ───────────────────────────────
+                        Card(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text(
+                                    'أوقات الشهر الحالي',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: cs.primary),
+                                  ),
+                                ),
+                                const Divider(),
+                                _buildMonthlyTable(cs),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // Monthly view
-                  Card(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Text(
-                              'أوقات الشهر الحالي',
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.primary),
-                            ),
-                          ),
-                          const Divider(),
-                          _buildMonthlyTable(cs),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-    ),
+      ),
     );
   }
 
   List<Widget> _buildTodayRows(ColorScheme cs) {
     final times = _todayTimes;
     final now = TimeOfDay.now();
-    final order = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    const order = ['fajr', 'sunrise', 'dhuhr', 'sunset', 'isha', 'midnight'];
     final isDark = cs.brightness == Brightness.dark;
 
     return order.map((key) {
       final time = times[key] ?? '--:--';
       final name = _prayerNames[key] ?? key;
-      final nameEn = _prayerNamesEn[key] ?? key;
       final icon = _prayerIcons[key] ?? Icons.access_time;
-      final isSunrise = key == 'sunrise';
+      final isInfo = _infoOnly.contains(key);
       final notifEnabled = _notifSettings[key] ?? true;
 
       bool isNext = false;
@@ -362,23 +425,31 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
-              BoxShadow(color: _green.withOpacity(0.5), blurRadius: 8, spreadRadius: 1),
+              BoxShadow(
+                  color: _green.withOpacity(0.5),
+                  blurRadius: 8,
+                  spreadRadius: 1),
             ],
           ),
-          child: const Icon(Icons.notifications_active, size: 20, color: _green),
+          child: const Icon(Icons.notifications_active,
+              size: 20, color: _green),
         );
-      } else if (isSunrise) {
-        bellWidget = Icon(Icons.wb_twilight, size: 20, color: cs.onSurface.withOpacity(0.25));
+      } else if (isInfo) {
+        bellWidget = Icon(icon,
+            size: 20, color: cs.onSurface.withOpacity(0.25));
       } else {
         bellWidget = GestureDetector(
           onTap: () => _toggleNotif(key),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
             child: Icon(
-              notifEnabled ? Icons.notifications : Icons.notifications_off_outlined,
+              notifEnabled
+                  ? Icons.notifications
+                  : Icons.notifications_off_outlined,
               key: ValueKey(notifEnabled),
               size: 20,
-              color: notifEnabled ? _gold : cs.onSurface.withOpacity(0.3),
+              color:
+                  notifEnabled ? _gold : cs.onSurface.withOpacity(0.3),
             ),
           ),
         );
@@ -394,10 +465,11 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
               : null,
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              // Left: prayer icon in circle
+              // Icon circle
               Container(
                 width: 42,
                 height: 42,
@@ -405,52 +477,44 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
                   shape: BoxShape.circle,
                   color: isNext
                       ? _green.withOpacity(0.15)
-                      : (isDark ? Colors.white10 : Colors.black.withOpacity(0.06)),
+                      : (isDark
+                          ? Colors.white10
+                          : Colors.black.withOpacity(0.06)),
                 ),
                 child: Icon(icon,
                     size: 20,
-                    color: isNext ? _green : cs.onSurface.withOpacity(0.5)),
+                    color: isNext
+                        ? _green
+                        : cs.onSurface.withOpacity(0.5)),
               ),
               const SizedBox(width: 12),
 
-              // Center: bell + names
+              // Arabic name only
               Expanded(
                 child: Row(
                   children: [
                     bellWidget,
                     const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          nameEn,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontFamily: 'sans-serif',
-                            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
-                            color: isNext ? _green : cs.onSurface.withOpacity(0.7),
-                          ),
-                        ),
-                        Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
-                            color: isNext ? _green : cs.onSurface,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight:
+                            isNext ? FontWeight.bold : FontWeight.normal,
+                        color: isNext ? _green : cs.onSurface,
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              // Right: Arabic time
+              // Arabic time
               Text(
                 _toArabicTime(time),
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
+                  fontWeight:
+                      isNext ? FontWeight.bold : FontWeight.normal,
                   color: isNext ? _green : cs.onSurface,
                   fontFamily: 'ScheherazadeNew',
                 ),
@@ -466,20 +530,21 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     final now = DateTime.now();
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
     final today = now.day;
-    const headers = ['يوم', 'فجر', 'ظهر', 'عصر', 'مغرب', 'عشاء'];
-    const keys = ['', 'fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-    const style = TextStyle(fontSize: 11);
-    const hStyle = TextStyle(fontSize: 11, fontWeight: FontWeight.bold);
+    const headers = ['يوم', 'فجر', 'ظهر', 'غروب', 'عشاء', 'منتصف'];
+    const keys = ['', 'fajr', 'dhuhr', 'sunset', 'isha', 'midnight'];
+    const style = TextStyle(fontSize: 10);
+    const hStyle = TextStyle(fontSize: 10, fontWeight: FontWeight.bold);
 
     return Table(
       defaultColumnWidth: const FlexColumnWidth(),
       border: TableBorder(
-        horizontalInside: BorderSide(color: cs.outline.withOpacity(0.15)),
+        horizontalInside:
+            BorderSide(color: cs.outline.withOpacity(0.15)),
       ),
       children: [
-        // Header row
         TableRow(
-          decoration: BoxDecoration(color: cs.primary.withOpacity(0.1)),
+          decoration:
+              BoxDecoration(color: cs.primary.withOpacity(0.1)),
           children: headers
               .map((h) => Padding(
                     padding: const EdgeInsets.symmetric(
@@ -489,7 +554,6 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
                   ))
               .toList(),
         ),
-        // Data rows
         ...List.generate(daysInMonth, (i) {
           final day = i + 1;
           final k =
@@ -497,19 +561,21 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
           final times = _allTimes[k];
           final Map<String, String> t = times is Map
               ? Map<String, String>.from(
-                  times.map((a, b) => MapEntry(a.toString(), b.toString())))
+                  times.map((a, b) =>
+                      MapEntry(a.toString(), b.toString())))
               : {};
           final isToday = day == today;
           final rowColor =
               isToday ? cs.primary.withOpacity(0.08) : null;
 
           return TableRow(
-            decoration:
-                rowColor != null ? BoxDecoration(color: rowColor) : null,
+            decoration: rowColor != null
+                ? BoxDecoration(color: rowColor)
+                : null,
             children: [
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                padding: const EdgeInsets.symmetric(
+                    vertical: 6, horizontal: 2),
                 child: Text('$day',
                     textAlign: TextAlign.center,
                     style: style.copyWith(
@@ -549,7 +615,8 @@ class _DateHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.calendar_today, size: 18, color: cs.onPrimaryContainer),
+          Icon(Icons.calendar_today,
+              size: 18, color: cs.onPrimaryContainer),
           const SizedBox(width: 8),
           Text(
             gregorian,
