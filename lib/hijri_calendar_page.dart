@@ -185,25 +185,6 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
       appBar: AppBar(
         title: const Text('التقويم'),
         actions: [
-          if (_hijriOffset != 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFC9A843),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _hijriOffset > 0 ? '+$_hijriOffset' : '$_hijriOffset',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
           TextButton(
             onPressed: _goToday,
             child: const Text('اليوم', style: TextStyle(color: Colors.white)),
