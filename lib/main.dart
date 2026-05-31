@@ -521,7 +521,7 @@ class _HomePageState extends State<HomePage> {
           'sunrise':  _stripTz(timings['Sunrise']  as String? ?? ''),
           'dhuhr':    _stripTz(timings['Dhuhr']    as String? ?? ''),
           'sunset':   _stripTz(timings['Sunset']   as String? ?? ''),
-          'isha':     _stripTz(timings['Isha']      as String? ?? ''),
+          'maghrib':  _stripTz(timings['Maghrib']  as String? ?? ''),
           'midnight': _stripTz(timings['Midnight'] as String? ?? ''),
         });
         return;
@@ -544,11 +544,11 @@ class _HomePageState extends State<HomePage> {
 
   void _findNextPrayer(Map<String, String> times) {
     final now = TimeOfDay.now();
-    const order = ['fajr', 'dhuhr', 'isha'];
+    const order = ['fajr', 'dhuhr', 'maghrib'];
     const names = {
-      'fajr':  'الفجر',
-      'dhuhr': 'الظهر',
-      'isha':  'العشاء',
+      'fajr':    'الفجر',
+      'dhuhr':   'الظهر',
+      'maghrib': 'المغرب',
     };
 
     for (final key in order) {
@@ -859,7 +859,7 @@ class _PrayerTimesBottomSheet extends StatelessWidget {
     'sunrise':  'الشروق',
     'dhuhr':    'الظهر',
     'sunset':   'الغروب',
-    'isha':     'العشاء',
+    'maghrib':  'المغرب',
     'midnight': 'منتصف الليل',
   };
 
@@ -868,7 +868,7 @@ class _PrayerTimesBottomSheet extends StatelessWidget {
     'sunrise':  Icons.wb_twilight,
     'dhuhr':    Icons.wb_sunny,
     'sunset':   Icons.brightness_4,
-    'isha':     Icons.nights_stay,
+    'maghrib':  Icons.nights_stay,
     'midnight': Icons.bedtime,
   };
 
@@ -891,7 +891,7 @@ class _PrayerTimesBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
-    const order = ['fajr', 'sunrise', 'dhuhr', 'sunset', 'isha', 'midnight'];
+    const order = ['fajr', 'sunrise', 'dhuhr', 'sunset', 'maghrib', 'midnight'];
     final now = TimeOfDay.now();
 
     return Container(
@@ -943,7 +943,7 @@ class _PrayerTimesBottomSheet extends StatelessWidget {
               final h = int.tryParse(p[0]) ?? 0;
               final m = int.tryParse(p[1]) ?? 0;
               isNext = (h > now.hour || (h == now.hour && m > now.minute)) &&
-                  (key == 'fajr' || key == 'dhuhr' || key == 'isha');
+                  (key == 'fajr' || key == 'dhuhr' || key == 'maghrib');
             }
 
             return Container(

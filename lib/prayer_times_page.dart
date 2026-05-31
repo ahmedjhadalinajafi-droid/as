@@ -23,7 +23,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   Map<String, bool> _notifSettings = {
     'fajr': true,
     'dhuhr': true,
-    'isha': true,
+    'maghrib': true,
   };
 
   static const _navy = Color(0xFF1B3D6F);
@@ -35,7 +35,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     'sunrise':  'الشروق',
     'dhuhr':    'الظهر',
     'sunset':   'الغروب',
-    'isha':     'العشاء',
+    'maghrib':  'المغرب',
     'midnight': 'منتصف الليل',
   };
 
@@ -44,7 +44,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     'sunrise':  Icons.wb_twilight,
     'dhuhr':    Icons.wb_sunny,
     'sunset':   Icons.brightness_4,
-    'isha':     Icons.nights_stay,
+    'maghrib':  Icons.nights_stay,
     'midnight': Icons.bedtime,
   };
 
@@ -123,11 +123,11 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
           final key = '${p[2]}-${p[1]}-${p[0]}'; // YYYY-MM-DD
           final timings = day['timings'] as Map<String, dynamic>;
           result[key] = {
-            'fajr':     _stripTz(timings['Fajr']    as String? ?? ''),
-            'sunrise':  _stripTz(timings['Sunrise'] as String? ?? ''),
-            'dhuhr':    _stripTz(timings['Dhuhr']   as String? ?? ''),
-            'sunset':   _stripTz(timings['Sunset']  as String? ?? ''),
-            'isha':     _stripTz(timings['Isha']     as String? ?? ''),
+            'fajr':     _stripTz(timings['Fajr']     as String? ?? ''),
+            'sunrise':  _stripTz(timings['Sunrise']  as String? ?? ''),
+            'dhuhr':    _stripTz(timings['Dhuhr']    as String? ?? ''),
+            'sunset':   _stripTz(timings['Sunset']   as String? ?? ''),
+            'maghrib':  _stripTz(timings['Maghrib']  as String? ?? ''),
             'midnight': _stripTz(timings['Midnight'] as String? ?? ''),
           };
         }
@@ -172,7 +172,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   void _updateCountdown() {
     final times = _todayTimes;
     final now = DateTime.now();
-    const order = ['fajr', 'dhuhr', 'isha'];
+    const order = ['fajr', 'dhuhr', 'maghrib'];
 
     for (final key in order) {
       final t = times[key];
@@ -395,7 +395,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   List<Widget> _buildTodayRows(ColorScheme cs) {
     final times = _todayTimes;
     final now = TimeOfDay.now();
-    const order = ['fajr', 'sunrise', 'dhuhr', 'sunset', 'isha', 'midnight'];
+    const order = ['fajr', 'sunrise', 'dhuhr', 'sunset', 'maghrib', 'midnight'];
     final isDark = cs.brightness == Brightness.dark;
 
     return order.map((key) {
@@ -530,8 +530,8 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     final now = DateTime.now();
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
     final today = now.day;
-    const headers = ['يوم', 'فجر', 'ظهر', 'غروب', 'عشاء', 'منتصف'];
-    const keys = ['', 'fajr', 'dhuhr', 'sunset', 'isha', 'midnight'];
+    const headers = ['يوم', 'فجر', 'ظهر', 'غروب', 'مغرب', 'منتصف'];
+    const keys = ['', 'fajr', 'dhuhr', 'sunset', 'maghrib', 'midnight'];
     const style = TextStyle(fontSize: 10);
     const hStyle = TextStyle(fontSize: 10, fontWeight: FontWeight.bold);
 
