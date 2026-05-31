@@ -6,9 +6,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hijri/hijri_calendar.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:provider/provider.dart';
@@ -496,37 +496,39 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Future<void> _loadPrayerTimes() async {
-    // Try Firebase first
-    try {
-      final today = _todayKey();
-      final doc = await FirebaseFirestore.instance
-          .collection('prayer_times')
-          .doc(today)
-          .get()
-          .timeout(const Duration(seconds: 5));
-      if (doc.exists && doc.data() != null) {
-        _setPrayerTimes(Map<String, String>.from(
-            doc.data()!.map((k, v) => MapEntry(k, v.toString()))));
-        return;
-      }
-    } catch (_) {}
+  static String _stripTz(String t) => t.split(' ').first;
 
-    // Fallback to local JSON
+  Future<void> _loadPrayerTimes() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    final now = DateTime.now();
+    final dateStr =
+        '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
     try {
-      final raw = await rootBundle.loadString('assets/prayer_times_2026.json');
-      final Map<String, dynamic> all = json.decode(raw);
-      final today = _todayKey();
-      if (all.containsKey(today)) {
-        final data = all[today] as Map<String, dynamic>;
-        _setPrayerTimes(data.map((k, v) => MapEntry(k, v.toString())));
+      final uri = Uri.parse(
+        'https://api.aladhan.com/v1/timings/$dateStr'
+        '?latitude=33.3152&longitude=44.3661&method=13',
+      );
+      final response =
+          await http.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final decoded =
+            json.decode(response.body) as Map<String, dynamic>;
+        final timings =
+            decoded['data']['timings'] as Map<String, dynamic>;
+        _setPrayerTimes({
+          'fajr':     _stripTz(timings['Fajr']     as String? ?? ''),
+          'sunrise':  _stripTz(timings['Sunrise']  as String? ?? ''),
+          'dhuhr':    _stripTz(timings['Dhuhr']    as String? ?? ''),
+          'sunset':   _stripTz(timings['Sunset']   as String? ?? ''),
+          'isha':     _stripTz(timings['Isha']      as String? ?? ''),
+          'midnight': _stripTz(timings['Midnight'] as String? ?? ''),
+        });
         return;
       }
     } catch (e) {
-      debugPrint('Prayer times load error: $e');
+      debugPrint('Prayer times error: $e');
     }
-
-    // Nothing loaded — stop spinner
     if (mounted) setState(() => _loading = false);
   }
 
@@ -542,18 +544,16 @@ class _HomePageState extends State<HomePage> {
 
   void _findNextPrayer(Map<String, String> times) {
     final now = TimeOfDay.now();
-    const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    const order = ['fajr', 'dhuhr', 'isha'];
     const names = {
-      'fajr': 'الفجر',
+      'fajr':  'الفجر',
       'dhuhr': 'الظهر',
-      'asr': 'العصر',
-      'maghrib': 'المغرب',
-      'isha': 'العشاء',
+      'isha':  'العشاء',
     };
 
     for (final key in order) {
       final t = times[key];
-      if (t == null) continue;
+      if (t == null || t.isEmpty) continue;
       final parts = t.split(':');
       if (parts.length < 2) continue;
       final h = int.tryParse(parts[0]) ?? 0;
@@ -575,8 +575,18 @@ class _HomePageState extends State<HomePage> {
     });
     final parts = (times['fajr'] ?? '').split(':');
     if (parts.length >= 2) {
-      _startCountdown(int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
+      _startCountdown(
+          int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
     }
+  }
+
+  void _showPrayerTimesCard() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _PrayerTimesBottomSheet(times: _todayPrayers),
+    );
   }
 
   void _startCountdown(int targetH, int targetM) {
@@ -696,14 +706,19 @@ class _HomePageState extends State<HomePage> {
                 const _DayWorshipTabs(),
                 const SizedBox(height: 12),
 
-                // Countdown card
+                // Countdown card — tap to see full day's prayer times
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: _loading
                       ? const SizedBox(
                           height: 100,
-                          child: Center(child: CircularProgressIndicator(color: Colors.white)))
-                      : _buildCountdownCard(),
+                          child: Center(
+                              child: CircularProgressIndicator(
+                                  color: Colors.white)))
+                      : GestureDetector(
+                          onTap: _showPrayerTimesCard,
+                          child: _buildCountdownCard(),
+                        ),
                 ),
 
                 const SizedBox(height: 20),
@@ -829,6 +844,171 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Prayer Times Bottom Sheet ───────────────────────────────────────────────
+
+class _PrayerTimesBottomSheet extends StatelessWidget {
+  final Map<String, String> times;
+  const _PrayerTimesBottomSheet({required this.times});
+
+  static const _prayerNames = {
+    'fajr':     'الفجر',
+    'sunrise':  'الشروق',
+    'dhuhr':    'الظهر',
+    'sunset':   'الغروب',
+    'isha':     'العشاء',
+    'midnight': 'منتصف الليل',
+  };
+
+  static const _prayerIcons = {
+    'fajr':     Icons.brightness_3,
+    'sunrise':  Icons.wb_twilight,
+    'dhuhr':    Icons.wb_sunny,
+    'sunset':   Icons.brightness_4,
+    'isha':     Icons.nights_stay,
+    'midnight': Icons.bedtime,
+  };
+
+  static const _navy = Color(0xFF1B3D6F);
+  static const _gold = Color(0xFFC9A843);
+
+  static String _toArabicTime(String t) {
+    const d = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+    final p = t.split(':');
+    if (p.length < 2) return t;
+    int h = int.tryParse(p[0]) ?? 0;
+    final m = int.tryParse(p[1]) ?? 0;
+    final s = h < 12 ? 'ص' : 'م';
+    if (h == 0) h = 12; else if (h > 12) h -= 12;
+    conv(int n) => n.toString().split('').map((c) => d[int.parse(c)]).join();
+    return '${conv(h)}:${conv(m).toString().padLeft(2, '٠')} $s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    const order = ['fajr', 'sunrise', 'dhuhr', 'sunset', 'isha', 'midnight'];
+    final now = TimeOfDay.now();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0D1B2E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: _gold.withOpacity(0.35), width: 1.5),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: cs.onSurface.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(Icons.access_time_filled, size: 18, color: _gold),
+              const SizedBox(width: 8),
+              Text(
+                'أوقات الصلاة - اليوم',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : _navy,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Divider(color: _gold.withOpacity(0.25)),
+          ...order.map((key) {
+            final time = times[key] ?? '--:--';
+            final name = _prayerNames[key] ?? key;
+            final icon = _prayerIcons[key] ?? Icons.access_time;
+
+            // Highlight the next upcoming prayer
+            bool isNext = false;
+            final p = time.split(':');
+            if (p.length >= 2) {
+              final h = int.tryParse(p[0]) ?? 0;
+              final m = int.tryParse(p[1]) ?? 0;
+              isNext = (h > now.hour || (h == now.hour && m > now.minute)) &&
+                  (key == 'fajr' || key == 'dhuhr' || key == 'isha');
+            }
+
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isNext
+                    ? (isDark
+                        ? const Color(0xFF1A2F1A)
+                        : const Color(0xFFE8F5E9))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: isNext
+                    ? Border.all(
+                        color: const Color(0xFF4CAF50).withOpacity(0.4))
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isNext
+                          ? const Color(0xFF4CAF50).withOpacity(0.15)
+                          : (isDark
+                              ? Colors.white10
+                              : Colors.black.withOpacity(0.06)),
+                    ),
+                    child: Icon(icon,
+                        size: 18,
+                        color: isNext
+                            ? const Color(0xFF4CAF50)
+                            : (isDark ? _gold : _navy).withOpacity(0.7)),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight:
+                          isNext ? FontWeight.bold : FontWeight.normal,
+                      color: isNext
+                          ? const Color(0xFF4CAF50)
+                          : cs.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    _toArabicTime(time),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: isNext
+                          ? const Color(0xFF4CAF50)
+                          : (isDark ? _gold : _navy),
+                      fontFamily: 'ScheherazadeNew',
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 }
