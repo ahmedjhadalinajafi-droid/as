@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'islamic_background.dart';
 
@@ -85,6 +86,7 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
   int? _selectedGregDay;
   late HijriCalendar _todayH;
   late DateTime _todayG;
+  int _hijriOffset = 0; // admin-controlled via Firestore settings/hijri { offset: N }
 
   @override
   void initState() {
@@ -94,6 +96,26 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
     _viewYear = _todayG.year;
     _viewMonth = _todayG.month;
     _selectedGregDay = _todayG.day;
+    _fetchOffset();
+  }
+
+  Future<void> _fetchOffset() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('hijri')
+          .get();
+      if (!mounted) return;
+      final offset = (doc.data()?['offset'] as num?)?.toInt() ?? 0;
+      setState(() {
+        _hijriOffset = offset;
+        _todayH = HijriCalendar.fromDate(
+          offset == 0 ? _todayG : _todayG.add(Duration(days: offset)),
+        );
+      });
+    } catch (_) {
+      // keep default offset 0 if Firestore unavailable
+    }
   }
 
   void _prev() => setState(() {
@@ -119,8 +141,12 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
   // 0 = Sunday
   int get _firstWeekday => DateTime(_viewYear, _viewMonth, 1).weekday % 7;
 
-  HijriCalendar _hijriFor(int gregDay) =>
-      HijriCalendar.fromDate(DateTime(_viewYear, _viewMonth, gregDay));
+  HijriCalendar _hijriFor(int gregDay) {
+    final base = DateTime(_viewYear, _viewMonth, gregDay);
+    return HijriCalendar.fromDate(
+      _hijriOffset == 0 ? base : base.add(Duration(days: _hijriOffset)),
+    );
+  }
 
   List<_Occasion> _occasionsFor(HijriCalendar h) => _islamicOccasions
       .where((o) => o.month == h.hMonth && o.day == h.hDay)
@@ -159,6 +185,25 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
       appBar: AppBar(
         title: const Text('التقويم'),
         actions: [
+          if (_hijriOffset != 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC9A843),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _hijriOffset > 0 ? '+$_hijriOffset' : '$_hijriOffset',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
           TextButton(
             onPressed: _goToday,
             child: const Text('اليوم', style: TextStyle(color: Colors.white)),
