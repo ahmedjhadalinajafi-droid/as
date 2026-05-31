@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:audio_session/audio_session.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
@@ -270,9 +271,21 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
 
   Surah get _current => widget.surahs[_currentIndex];
 
-  String get _audioUrl {
-    final num = _current.id.toString().padLeft(3, '0');
-    return 'https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/$num.mp3';
+  // Cache of resolved Firebase Storage download URLs, keyed by surah id,
+  // so we only hit Storage once per surah.
+  static final Map<int, String> _urlCache = {};
+
+  // Recitation by الشيخ أحمد الدباغ.
+  // Audio files live in Firebase Storage under  quran_audio/<surah>.mp3
+  // (named 1.mp3 … 114.mp3 to match the surah number).
+  Future<String> _resolveAudioUrl() async {
+    final id = _current.id;
+    final cached = _urlCache[id];
+    if (cached != null) return cached;
+    final ref = FirebaseStorage.instance.ref('quran_audio/$id.mp3');
+    final url = await ref.getDownloadURL();
+    _urlCache[id] = url;
+    return url;
   }
 
   Future<void> _playPause() async {
@@ -284,7 +297,8 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
         _playerState == null) {
       setState(() => _audioLoading = true);
       try {
-        await _player.setUrl(_audioUrl);
+        final url = await _resolveAudioUrl();
+        await _player.setUrl(url);
         setState(() => _audioLoading = false);
       } catch (e) {
         setState(() => _audioLoading = false);
