@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Masjid Al-Noor - Baghdad, Iraq</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar" id="navbar">
+    <div class="container nav-inner">
+      <a href="#home" class="logo">
+        <span class="logo-arabic">المسجد</span>
+        <span class="logo-text">Masjid Al-Noor — Baghdad</span>
+      </a>
+      <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#home">Home</a></li>
+        <li><a href="#prayer-times">Prayer Times</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#events">Events</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a href="#donate" class="btn-nav">Donate</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero" id="home">
+    <div class="hero-overlay"></div>
+    <div class="container hero-content">
+      <p class="bismillah">بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ</p>
+      <h1>Welcome to Masjid Al-Noor</h1>
+      <p class="hero-sub">A place of worship, community, and learning in the heart of Baghdad, Iraq — open to all.</p>
+      <div class="hero-actions">
+        <a href="#prayer-times" class="btn btn-primary">Prayer Times</a>
+        <a href="#about" class="btn btn-outline">Learn More</a>
+      </div>
+    </div>
+    <div class="scroll-hint">&#8595;</div>
+  </section>
+
+  <!-- Prayer Times -->
+  <section class="section prayer-section" id="prayer-times">
+    <div class="container">
+      <div class="section-header">
+        <h2>Prayer Times</h2>
+        <p id="prayerDate" class="section-sub"></p>
+      </div>
+      <div class="prayer-grid">
+        <div class="prayer-card" data-prayer="fajr">
+          <div class="prayer-icon">🌙</div>
+          <h3>Fajr</h3>
+          <p class="prayer-adhan">Adhan <span>5:12 AM</span></p>
+          <p class="prayer-iqamah">Iqamah <span>5:30 AM</span></p>
+        </div>
+        <div class="prayer-card" data-prayer="dhuhr">
+          <div class="prayer-icon">☀️</div>
+          <h3>Dhuhr</h3>
+          <p class="prayer-adhan">Adhan <span>1:15 PM</span></p>
+          <p class="prayer-iqamah">Iqamah <span>1:30 PM</span></p>
+        </div>
+        <div class="prayer-card" data-prayer="asr">
+          <div class="prayer-icon">🌤️</div>
+          <h3>Asr</h3>
+          <p class="prayer-adhan">Adhan <span>4:45 PM</span></p>
+          <p class="prayer-iqamah">Iqamah <span>5:00 PM</span></p>
+        </div>
+        <div class="prayer-card" data-prayer="maghrib">
+          <div class="prayer-icon">🌅</div>
+          <h3>Maghrib</h3>
+          <p class="prayer-adhan">Adhan <span>7:52 PM</span></p>
+          <p class="prayer-iqamah">Iqamah <span>7:57 PM</span></p>
+        </div>
+        <div class="prayer-card" data-prayer="isha">
+          <div class="prayer-icon">🌃</div>
+          <h3>Isha</h3>
+          <p class="prayer-adhan">Adhan <span>9:20 PM</span></p>
+          <p class="prayer-iqamah">Iqamah <span>9:30 PM</span></p>
+        </div>
+      </div>
+      <div class="jumu-banner">
+        <span>🕌</span>
+        <div>
+          <strong>Jumu'ah (Friday Prayer)</strong>
+          <p>Khutbah begins at <strong>1:15 PM</strong> &nbsp;·&nbsp; Salah at <strong>1:45 PM</strong></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About -->
+  <section class="section about-section" id="about">
+    <div class="container about-grid">
+      <div class="about-text">
+        <div class="section-header left">
+          <h2>About Our Masjid</h2>
+          <p class="section-sub">Serving the community since 1995</p>
+        </div>
+        <p>Masjid Al-Noor is a welcoming Islamic centre located in Baghdad, Iraq. Dedicated to worship, education, and community service, we serve families and individuals seeking spiritual growth, knowledge, and meaningful connection.</p>
+        <p>Our programmes include daily Salah, Quran classes for all ages, Islamic school, youth groups, and regular community outreach. We strive to embody the values of mercy, justice, and compassion taught in the Quran and Sunnah.</p>
+        <div class="stats-row">
+          <div class="stat"><span>30+</span><p>Years of Service</p></div>
+          <div class="stat"><span>1,200+</span><p>Families</p></div>
+          <div class="stat"><span>50+</span><p>Weekly Classes</p></div>
+        </div>
+      </div>
+      <div class="about-image">
+        <div class="mosque-illustration">
+          <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" aria-label="Mosque illustration">
+            <!-- Base -->
+            <rect x="50" y="200" width="300" height="80" rx="4" fill="#1a6b5a"/>
+            <!-- Main dome -->
+            <ellipse cx="200" cy="160" rx="80" ry="60" fill="#2a8a6e"/>
+            <rect x="120" y="160" width="160" height="40" fill="#2a8a6e"/>
+            <!-- Side domes -->
+            <ellipse cx="100" cy="190" rx="45" ry="35" fill="#1a6b5a"/>
+            <rect x="55" y="190" width="90" height="10" fill="#1a6b5a"/>
+            <ellipse cx="300" cy="190" rx="45" ry="35" fill="#1a6b5a"/>
+            <rect x="255" y="190" width="90" height="10" fill="#1a6b5a"/>
+            <!-- Minarets -->
+            <rect x="55" y="110" width="18" height="100" rx="4" fill="#0f4d3d"/>
+            <ellipse cx="64" cy="108" rx="12" ry="18" fill="#2a8a6e"/>
+            <line x1="64" y1="90" x2="64" y2="78" stroke="#c8a84b" stroke-width="2"/>
+            <polygon points="64,72 67,80 61,80" fill="#c8a84b"/>
+            <rect x="327" y="110" width="18" height="100" rx="4" fill="#0f4d3d"/>
+            <ellipse cx="336" cy="108" rx="12" ry="18" fill="#2a8a6e"/>
+            <line x1="336" y1="90" x2="336" y2="78" stroke="#c8a84b" stroke-width="2"/>
+            <polygon points="336,72 339,80 333,80" fill="#c8a84b"/>
+            <!-- Crescent on main dome -->
+            <line x1="200" y1="100" x2="200" y2="82" stroke="#c8a84b" stroke-width="2.5"/>
+            <path d="M196,76 A8,8 0 1,1 204,76 A5,5 0 1,0 196,76" fill="#c8a84b"/>
+            <!-- Door -->
+            <path d="M180,240 L180,200 Q200,185 220,200 L220,240 Z" fill="#0f4d3d"/>
+            <!-- Windows -->
+            <path d="M130,185 L130,168 Q138,160 146,168 L146,185 Z" fill="#0f4d3d" opacity="0.7"/>
+            <path d="M254,185 L254,168 Q262,160 270,168 L270,185 Z" fill="#0f4d3d" opacity="0.7"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Events -->
+  <section class="section events-section" id="events">
+    <div class="container">
+      <div class="section-header">
+        <h2>Upcoming Events</h2>
+        <p class="section-sub">Stay connected with the community</p>
+      </div>
+      <div class="events-grid">
+        <article class="event-card">
+          <div class="event-date">
+            <span class="event-day">06</span>
+            <span class="event-month">Jun</span>
+          </div>
+          <div class="event-info">
+            <span class="event-tag">Education</span>
+            <h3>Quran Memorisation Programme</h3>
+            <p>New intake for our Hifz programme. Ages 8–16. Registration open now.</p>
+            <p class="event-meta">📍 Masjid Hall &nbsp;·&nbsp; 🕕 6:00 PM</p>
+          </div>
+        </article>
+        <article class="event-card">
+          <div class="event-date">
+            <span class="event-day">14</span>
+            <span class="event-month">Jun</span>
+          </div>
+          <div class="event-info">
+            <span class="event-tag">Community</span>
+            <h3>Monthly Family Day</h3>
+            <p>Join us for food, games, and community bonding. All are welcome.</p>
+            <p class="event-meta">📍 Masjid Grounds &nbsp;·&nbsp; 🕑 2:00 PM</p>
+          </div>
+        </article>
+        <article class="event-card">
+          <div class="event-date">
+            <span class="event-day">21</span>
+            <span class="event-month">Jun</span>
+          </div>
+          <div class="event-info">
+            <span class="event-tag">Lecture</span>
+            <h3>Friday Night Talk: The Seerah</h3>
+            <p>A series on the life of the Prophet ﷺ by Sheikh Abdullah Malik.</p>
+            <p class="event-meta">📍 Main Prayer Hall &nbsp;·&nbsp; 🕗 7:30 PM</p>
+          </div>
+        </article>
+        <article class="event-card">
+          <div class="event-date">
+            <span class="event-day">28</span>
+            <span class="event-month">Jun</span>
+          </div>
+          <div class="event-info">
+            <span class="event-tag">Youth</span>
+            <h3>Youth Leadership Workshop</h3>
+            <p>An interactive workshop for Muslim youth aged 16–25 on leadership skills.</p>
+            <p class="event-meta">📍 Conference Room &nbsp;·&nbsp; 🕙 10:00 AM</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Donate -->
+  <section class="donate-section" id="donate">
+    <div class="container donate-inner">
+      <div class="donate-text">
+        <h2>Support Your Masjid</h2>
+        <p>Your donations help us maintain the masjid, run programmes, and serve the community. Every contribution counts.</p>
+        <p class="hadith">"Whoever builds a masjid for Allah, Allah will build for him a house in Paradise." — Sahih al-Bukhari</p>
+      </div>
+      <div class="donate-actions">
+        <button class="btn btn-gold" onclick="alert('Donation portal coming soon. JazakAllah Khair!')">Donate Now</button>
+        <p class="donate-note">Donations are accepted in person or via bank transfer.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact -->
+  <section class="section contact-section" id="contact">
+    <div class="container contact-grid">
+      <div class="contact-info">
+        <div class="section-header left">
+          <h2>Get in Touch</h2>
+          <p class="section-sub">We'd love to hear from you</p>
+        </div>
+        <div class="contact-items">
+          <div class="contact-item">
+            <span>📍</span>
+            <div>
+              <strong>Address</strong>
+              <p>Al-Karada District, Baghdad, Iraq</p>
+            </div>
+          </div>
+          <div class="contact-item">
+            <span>📞</span>
+            <div>
+              <strong>Phone</strong>
+              <p>+964 7700 000 000</p>
+            </div>
+          </div>
+          <div class="contact-item">
+            <span>✉️</span>
+            <div>
+              <strong>Email</strong>
+              <p>info@masjidalnoorbaghdad.org</p>
+            </div>
+          </div>
+          <div class="contact-item">
+            <span>🕐</span>
+            <div>
+              <strong>Office Hours</strong>
+              <p>Mon–Fri: 9 AM – 5 PM<br/>Sat–Sun: 10 AM – 2 PM</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <form class="contact-form" id="contactForm">
+        <div class="form-group">
+          <label for="name">Full Name</label>
+          <input type="text" id="name" name="name" placeholder="Your name" required />
+        </div>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="your@email.com" required />
+        </div>
+        <div class="form-group">
+          <label for="subject">Subject</label>
+          <select id="subject" name="subject">
+            <option value="">Select a topic</option>
+            <option>General Enquiry</option>
+            <option>Prayer Times</option>
+            <option>Classes & Education</option>
+            <option>Events</option>
+            <option>Donations</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="message">Message</label>
+          <textarea id="message" name="message" rows="4" placeholder="Write your message here..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary full-width">Send Message</button>
+        <p class="form-success" id="formSuccess">JazakAllah Khair! Your message has been sent.</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <span class="logo-arabic">المسجد</span>
+        <span>Masjid Al-Noor</span>
+      </div>
+      <p class="footer-tagline">A community built on faith, knowledge, and service.</p>
+      <nav class="footer-links">
+        <a href="#home">Home</a>
+        <a href="#prayer-times">Prayer Times</a>
+        <a href="#about">About</a>
+        <a href="#events">Events</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <p class="footer-copy">&copy; 2026 Masjid Al-Noor. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
