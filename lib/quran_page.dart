@@ -240,26 +240,128 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
   Duration _duration = Duration.zero;
   bool _audioLoading = false;
 
+  // Ayah-by-ayah highlight sync
+  List<Verse>? _verses; // verses of the current surah
+  List<double>? _timings; // exact per-ayah start times (sec) if available
+  int? _activeAyah; // id of the ayah currently being recited (highlighted)
+  static final Map<int, List<double>?> _timingsCache = {};
+
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
     _setupAudio();
+    _loadSurahMeta();
   }
 
   Future<void> _setupAudio() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.speech());
     _player.playerStateStream.listen((s) {
-      if (mounted) setState(() => _playerState = s);
+      if (!mounted) return;
+      setState(() => _playerState = s);
+      // When the surah finishes, remove the highlight.
+      if (s.processingState == ProcessingState.completed) {
+        _setActiveAyah(null);
+      }
     });
     _player.positionStream.listen((p) {
-      if (mounted) setState(() => _position = p);
+      if (!mounted) return;
+      setState(() => _position = p);
+      _updateActiveAyah(p);
     });
     _player.durationStream.listen((d) {
       if (mounted) setState(() => _duration = d ?? Duration.zero);
     });
+  }
+
+  // Load the current surah's verses + (optional) exact ayah timings.
+  Future<void> _loadSurahMeta() async {
+    final id = _current.id;
+    final verses = await loadVerses(id);
+    final timings = await _loadTimings(id);
+    if (!mounted || id != _current.id) return;
+    setState(() {
+      _verses = verses;
+      _timings = (timings != null && timings.length == verses.length)
+          ? timings
+          : null;
+      _activeAyah = null;
+    });
+  }
+
+  // Per-ayah start times (seconds) stored in  quran_audio/<surah>.json
+  // as a JSON array, e.g. [0, 4.8, 11.2, ...]. Returns null if absent.
+  Future<List<double>?> _loadTimings(int id) async {
+    if (_timingsCache.containsKey(id)) return _timingsCache[id];
+    try {
+      final ref = FirebaseStorage.instance.ref('quran_audio/$id.json');
+      final bytes = await ref.getData(2 * 1024 * 1024);
+      if (bytes == null) {
+        _timingsCache[id] = null;
+        return null;
+      }
+      final decoded = json.decode(utf8.decode(bytes));
+      List<double>? starts;
+      if (decoded is List) {
+        starts = decoded.map((e) => (e as num).toDouble()).toList();
+      } else if (decoded is Map && decoded['ayahs'] is List) {
+        starts = (decoded['ayahs'] as List)
+            .map((e) => (e as num).toDouble())
+            .toList();
+      }
+      _timingsCache[id] = starts;
+      return starts;
+    } catch (_) {
+      _timingsCache[id] = null;
+      return null;
+    }
+  }
+
+  // Start time (seconds) for every ayah: exact timings if uploaded,
+  // otherwise estimated from each ayah's share of the total duration
+  // (weighted by letter count) so highlighting still works.
+  List<double>? _ayahStarts() {
+    final verses = _verses;
+    if (verses == null || verses.isEmpty) return null;
+    final timings = _timings;
+    if (timings != null && timings.length == verses.length) return timings;
+    final durMs = _duration.inMilliseconds;
+    if (durMs <= 0) return null;
+    final weights =
+        verses.map((v) => v.text.replaceAll(' ', '').length).toList();
+    final total = weights.fold<int>(0, (a, b) => a + b);
+    if (total == 0) return null;
+    final dur = durMs / 1000.0;
+    final starts = <double>[];
+    int acc = 0;
+    for (final w in weights) {
+      starts.add(acc / total * dur);
+      acc += w;
+    }
+    return starts;
+  }
+
+  void _updateActiveAyah(Duration pos) {
+    final verses = _verses;
+    final starts = _ayahStarts();
+    if (verses == null || starts == null) return;
+    final t = pos.inMilliseconds / 1000.0;
+    int idx = 0;
+    for (int i = 0; i < starts.length; i++) {
+      if (t + 0.001 >= starts[i]) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    _setActiveAyah(verses[idx].id);
+  }
+
+  void _setActiveAyah(int? id) {
+    if (_activeAyah == id) return;
+    if (mounted) setState(() => _activeAyah = id);
   }
 
   @override
@@ -313,12 +415,16 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
     await _player.play();
   }
 
-  Future<void> _stopAudio() async => _player.stop();
+  Future<void> _stopAudio() async {
+    await _player.stop();
+    _setActiveAyah(null);
+  }
 
   void _goTo(int index) {
     if (index < 0 || index >= widget.surahs.length) return;
     _stopAudio();
     setState(() => _currentIndex = index);
+    _loadSurahMeta();
     _pageController.animateToPage(index,
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
@@ -407,7 +513,7 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'مشاري العفاسي',
+                            'الشيخ أحمد الدباغ',
                             style: TextStyle(
                               fontSize: 11,
                               color: cs.onSurface.withOpacity(0.6),
@@ -487,10 +593,12 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
                 onPageChanged: (i) {
                   _stopAudio();
                   setState(() => _currentIndex = i);
+                  _loadSurahMeta();
                 },
                 itemBuilder: (_, i) => _SurahContent(
                   surah: widget.surahs[i],
                   fontSize: _fontSize,
+                  activeAyah: i == _currentIndex ? _activeAyah : null,
                 ),
               ),
             ),
@@ -506,7 +614,15 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
 class _SurahContent extends StatefulWidget {
   final Surah surah;
   final double fontSize;
-  const _SurahContent({required this.surah, required this.fontSize});
+
+  /// Id of the ayah currently being recited — highlighted and scrolled to.
+  final int? activeAyah;
+
+  const _SurahContent({
+    required this.surah,
+    required this.fontSize,
+    this.activeAyah,
+  });
 
   @override
   State<_SurahContent> createState() => _SurahContentState();
@@ -514,6 +630,7 @@ class _SurahContent extends StatefulWidget {
 
 class _SurahContentState extends State<_SurahContent> {
   List<Verse>? _verses;
+  final Map<int, GlobalKey> _keys = {};
 
   @override
   void initState() {
@@ -524,7 +641,24 @@ class _SurahContentState extends State<_SurahContent> {
   @override
   void didUpdateWidget(_SurahContent old) {
     super.didUpdateWidget(old);
-    if (old.surah.id != widget.surah.id) _load();
+    if (old.surah.id != widget.surah.id) {
+      _keys.clear();
+      _load();
+    }
+    // Auto-scroll to keep the reciting ayah comfortably in view.
+    if (widget.activeAyah != null && widget.activeAyah != old.activeAyah) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _keys[widget.activeAyah]?.currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(
+            ctx,
+            alignment: 0.35,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOut,
+          );
+        }
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -535,16 +669,14 @@ class _SurahContentState extends State<_SurahContent> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
 
     if (_verses == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // All verses joined as one continuous flowing text — true Mushaf style
-    final allText = _verses!.map((v) => '${v.text} ﴿${v.id}﴾').join('  ');
-
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -584,20 +716,65 @@ class _SurahContentState extends State<_SurahContent> {
               ],
             ),
           ),
-          // One continuous flowing text block
-          Text(
-            allText,
-            textDirection: TextDirection.rtl,
-            textAlign: TextAlign.justify,
-            style: TextStyle(
-              fontFamily: 'ScheherazadeNew',
+          // One highlightable block per ayah
+          for (final v in _verses!)
+            _AyahBlock(
+              key: _keys.putIfAbsent(v.id, () => GlobalKey()),
+              verse: v,
               fontSize: widget.fontSize,
-              height: 2.2,
-              color: cs.onSurface,
+              active: widget.activeAyah == v.id,
+              isDark: isDark,
             ),
-          ),
           const SizedBox(height: 40),
         ],
+      ),
+    );
+  }
+}
+
+// A single ayah; turns gold/tinted while it is being recited.
+class _AyahBlock extends StatelessWidget {
+  final Verse verse;
+  final double fontSize;
+  final bool active;
+  final bool isDark;
+  const _AyahBlock({
+    super.key,
+    required this.verse,
+    required this.fontSize,
+    required this.active,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: active
+            ? cs.primary.withOpacity(isDark ? 0.30 : 0.13)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        border: active
+            ? Border.all(color: cs.primary.withOpacity(0.45))
+            : null,
+      ),
+      child: Text(
+        '${verse.text} ﴿${verse.id}﴾',
+        textDirection: TextDirection.rtl,
+        textAlign: TextAlign.justify,
+        style: TextStyle(
+          fontFamily: 'ScheherazadeNew',
+          fontSize: fontSize,
+          height: 2.1,
+          color: active ? cs.primary : cs.onSurface,
+          fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+        ),
       ),
     );
   }
