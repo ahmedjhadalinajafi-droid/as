@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'islamic_background.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -28,9 +29,9 @@ class CampaignsPage extends StatelessWidget {
     final isDark = cs.brightness == Brightness.dark;
     final stream = _buildStream();
 
-    return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
+    return IslamicPatternBackground(
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('حملات أهل البيت (ع)'),
       ),
@@ -58,6 +59,7 @@ class CampaignsPage extends StatelessWidget {
                 );
               },
             ),
+    ),
     );
   }
 }

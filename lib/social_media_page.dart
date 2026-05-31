@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'islamic_background.dart';
 
 class SocialMediaPage extends StatelessWidget {
   const SocialMediaPage({super.key});
@@ -76,7 +77,8 @@ class SocialMediaPage extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
 
-    return Scaffold(
+    return IslamicPatternBackground(
+      child: Scaffold( backgroundColor: Colors.transparent,
       body: CustomScrollView(
         slivers: [
           // Collapsible header
@@ -219,6 +221,7 @@ class SocialMediaPage extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

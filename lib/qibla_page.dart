@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
+import 'islamic_background.dart';
 
 class QiblaPage extends StatefulWidget {
   const QiblaPage({super.key});
@@ -174,7 +175,8 @@ class _QiblaPageState extends State<QiblaPage> {
     // Gold ONLY when you are actually facing the Qibla
     final activeColor = _aligned ? _gold : (_hasLocation ? _navy : cs.primary);
 
-    return Scaffold(
+    return IslamicPatternBackground(
+      child: Scaffold( backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('اتجاه القبلة'),
         actions: [
@@ -367,6 +369,7 @@ class _QiblaPageState extends State<QiblaPage> {
           ),
         ),
       ),
+    ),
     );
   }
 

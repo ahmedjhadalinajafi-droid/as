@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hijri/hijri_calendar.dart';
+import 'islamic_background.dart';
 
 // ─── Islamic Occasions ────────────────────────────────────────────────────────
 
@@ -152,8 +153,9 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
       selectedOccasions = _occasionsFor(selectedH);
     }
 
-    return Scaffold(
-      backgroundColor: cs.surface,
+    return IslamicPatternBackground(
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('التقويم'),
         actions: [
@@ -556,6 +558,7 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
           ],
         ),
       ),
+    ),
     );
   }
 }

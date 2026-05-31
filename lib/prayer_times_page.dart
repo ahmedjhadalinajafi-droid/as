@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'notification_service.dart';
+import 'islamic_background.dart';
 
 class PrayerTimesPage extends StatefulWidget {
   const PrayerTimesPage({super.key});
@@ -159,7 +160,8 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return IslamicPatternBackground(
+      child: Scaffold( backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('أوقات الصلاة'),
         actions: [
@@ -321,6 +323,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
                 ],
               ),
             ),
+    ),
     );
   }
 

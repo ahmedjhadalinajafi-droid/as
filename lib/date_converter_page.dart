@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:intl/intl.dart';
+import 'islamic_background.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -83,9 +84,9 @@ class _DateConverterPageState extends State<DateConverterPage> {
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
+    return IslamicPatternBackground(
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('محوّل التاريخ')),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -137,6 +138,7 @@ class _DateConverterPageState extends State<DateConverterPage> {
           ],
         ),
       ),
+    ),
     );
   }
 

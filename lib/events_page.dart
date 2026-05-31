@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'islamic_background.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -41,7 +42,8 @@ class _EventsPageState extends State<EventsPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return IslamicPatternBackground(
+      child: Scaffold( backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('الفعاليات والأحداث'),
         bottom: TabBar(
@@ -62,6 +64,7 @@ class _EventsPageState extends State<EventsPage>
           _EventList(upcoming: false),
         ],
       ),
+    ),
     );
   }
 }

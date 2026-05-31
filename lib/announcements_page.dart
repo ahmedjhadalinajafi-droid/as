@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'islamic_background.dart';
 
 // Admin email — only this account can add/delete announcements
 const _adminEmail = 'ahmedjhadalinajafi@gmail.com';
@@ -21,7 +22,8 @@ class AnnouncementsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return IslamicPatternBackground(
+      child: Scaffold( backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('الإعلانات'),
       ),
@@ -63,6 +65,7 @@ class AnnouncementsPage extends StatelessWidget {
           );
         },
       ),
+    ),
     );
   }
 }
@@ -335,7 +338,8 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return IslamicPatternBackground(
+      child: Scaffold( backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('إعلان جديد'),
         actions: [
@@ -436,6 +440,7 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
           ),
         ),
       ),
+    ),
     );
   }
 }

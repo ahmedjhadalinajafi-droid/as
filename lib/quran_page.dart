@@ -3,6 +3,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+import 'islamic_background.dart';
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
@@ -137,7 +138,8 @@ class _QuranPageState extends State<QuranPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Scaffold(
+    return IslamicPatternBackground(
+      child: Scaffold( backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('القرآن الكريم')),
       body: Column(
         children: [
@@ -204,6 +206,7 @@ class _QuranPageState extends State<QuranPage> {
           ),
         ],
       ),
+    ),
     );
   }
 }

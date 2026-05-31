@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'islamic_background.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -147,8 +148,9 @@ class _MafatihPageState extends State<MafatihPage>
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
+    return IslamicPatternBackground(
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics()),
@@ -461,6 +463,7 @@ class _MafatihPageState extends State<MafatihPage>
             ),
         ],
       ),
+    ),
     );
   }
 }

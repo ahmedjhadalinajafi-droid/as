@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -20,6 +19,7 @@ import 'campaigns_page.dart';
 import 'date_converter_page.dart';
 import 'events_page.dart';
 import 'hijri_calendar_page.dart';
+import 'islamic_background.dart';
 import 'mafatih_page.dart';
 import 'notification_service.dart';
 import 'prayer_times_page.dart';
@@ -287,95 +287,6 @@ class _MainShellState extends State<MainShell> {
       ),
     );
   }
-}
-
-// ─── Islamic Geometric Pattern Painter ───────────────────────────────────────
-
-class _IslamicPatternPainter extends CustomPainter {
-  final Color color;
-  _IslamicPatternPainter(this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 0.9
-      ..style = PaintingStyle.stroke
-      ..isAntiAlias = true;
-
-    const cell = 64.0;
-    const half = cell / 2;
-
-    // Staggered grid of 8-pointed stars
-    int row = 0;
-    for (double y = -cell; y < size.height + cell; y += half) {
-      final xOffset = (row % 2 == 0) ? 0.0 : half;
-      for (double x = -cell + xOffset; x < size.width + cell; x += cell) {
-        _drawStar(canvas, paint, Offset(x, y), cell * 0.42);
-        _drawInnerSquare(canvas, paint, Offset(x, y), cell * 0.18);
-      }
-      row++;
-    }
-
-    // Connecting lines between stars
-    row = 0;
-    for (double y = -cell; y < size.height + cell; y += half) {
-      final xOffset = (row % 2 == 0) ? 0.0 : half;
-      for (double x = -cell + xOffset; x < size.width + cell; x += cell) {
-        _drawConnectors(canvas, paint, Offset(x, y), cell * 0.42, half);
-      }
-      row++;
-    }
-  }
-
-  void _drawStar(Canvas canvas, Paint paint, Offset c, double r) {
-    final path = Path();
-    final innerR = r * 0.42;
-    for (int i = 0; i < 16; i++) {
-      final angle = i * math.pi / 8 - math.pi / 2;
-      final radius = i % 2 == 0 ? r : innerR;
-      final pt = Offset(
-        c.dx + radius * math.cos(angle),
-        c.dy + radius * math.sin(angle),
-      );
-      if (i == 0) path.moveTo(pt.dx, pt.dy);
-      else path.lineTo(pt.dx, pt.dy);
-    }
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawInnerSquare(Canvas canvas, Paint paint, Offset c, double r) {
-    final path = Path();
-    for (int i = 0; i < 4; i++) {
-      final angle = i * math.pi / 2 - math.pi / 4;
-      final pt = Offset(c.dx + r * math.cos(angle), c.dy + r * math.sin(angle));
-      if (i == 0) path.moveTo(pt.dx, pt.dy);
-      else path.lineTo(pt.dx, pt.dy);
-    }
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawConnectors(Canvas canvas, Paint p, Offset c, double r, double half) {
-    final tipDist = r;
-    for (int i = 0; i < 8; i++) {
-      final angle = i * math.pi / 4 - math.pi / 8;
-      final tip = Offset(
-        c.dx + tipDist * math.cos(angle),
-        c.dy + tipDist * math.sin(angle),
-      );
-      final nextAngle = angle + math.pi / 8 * 2;
-      final nextTip = Offset(
-        c.dx + tipDist * math.cos(nextAngle),
-        c.dy + tipDist * math.sin(nextAngle),
-      );
-      canvas.drawLine(tip, nextTip, p);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_IslamicPatternPainter old) => old.color != color;
 }
 
 // ─── Floating Animated Nav Bar ────────────────────────────────────────────────
@@ -727,14 +638,16 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          // Bottom white/surface area
+          // Bottom white/surface area with Islamic pattern
           Align(
             alignment: Alignment.bottomCenter,
-            child: Container(
-              height: MediaQuery.of(context).size.height * 0.55,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0A1628) : const Color(0xFFF5F5F0),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(32)),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.55,
+                width: double.infinity,
+                child: const IslamicPatternBackground(child: SizedBox.expand()),
               ),
             ),
           ),
@@ -745,7 +658,7 @@ class _HomePageState extends State<HomePage> {
             right: 0,
             height: MediaQuery.of(context).size.height * 0.48,
             child: CustomPaint(
-              painter: _IslamicPatternPainter(Colors.white.withOpacity(0.05)),
+              painter: IslamicPatternPainter(Colors.white.withOpacity(0.05)),
             ),
           ),
 
@@ -1590,26 +1503,29 @@ class MorePage extends StatelessWidget {
       ),
     ];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('المزيد'),
-        actions: [
-          IconButton(
-            onPressed: theme.toggle,
-            icon: Icon(theme.isDark ? Icons.light_mode : Icons.dark_mode),
-          ),
-        ],
-      ),
-      body: GridView.count(
-        crossAxisCount: 2,
-        padding: const EdgeInsets.all(16),
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        children: items
-            .map(
-              (item) => _MoreCard(item: item),
-            )
-            .toList(),
+    return IslamicPatternBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('المزيد'),
+          actions: [
+            IconButton(
+              onPressed: theme.toggle,
+              icon: Icon(theme.isDark ? Icons.light_mode : Icons.dark_mode),
+            ),
+          ],
+        ),
+        body: GridView.count(
+          crossAxisCount: 2,
+          padding: const EdgeInsets.all(16),
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          children: items
+              .map(
+                (item) => _MoreCard(item: item),
+              )
+              .toList(),
+        ),
       ),
     );
   }

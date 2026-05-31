@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'islamic_background.dart';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -335,7 +336,8 @@ class ZiyaratPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return IslamicPatternBackground(
+      child: Scaffold( backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('الزيارات والمناسبات')),
       body: ListView.builder(
         padding: const EdgeInsets.all(12),
@@ -401,6 +403,7 @@ class ZiyaratPage extends StatelessWidget {
           );
         },
       ),
+    ),
     );
   }
 }
