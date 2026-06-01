@@ -147,8 +147,12 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
   Future<bool> _loadFromFirestore() async {
     try {
       final now = DateTime.now();
+      // Fetch from the 1st of this month through the end of NEXT month, so the
+      // app always has at least the next ~15 days cached even near month-end.
       final start = '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
-      final end   = '${now.year}-${now.month.toString().padLeft(2, '0')}-31';
+      final nextMonth = DateTime(now.year, now.month + 1, 1);
+      final end =
+          '${nextMonth.year}-${nextMonth.month.toString().padLeft(2, '0')}-31';
       final snap = await FirebaseFirestore.instance
           .collection('prayer_times')
           .where(FieldPath.documentId(), isGreaterThanOrEqualTo: start)
