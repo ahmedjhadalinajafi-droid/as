@@ -4,8 +4,14 @@ Upload prayer times for a full year to Firebase Firestore.
 Requirements:
     pip install firebase-admin requests
 
-Usage:
-    python3 tools/upload_prayer_times.py --year 2026 --key path/to/serviceAccountKey.json
+Two modes:
+
+  A) Upload from a JSON file (the official Karkh times bundled in the app):
+       python3 tools/upload_prayer_times.py --json assets/prayer_times_2026.json \
+           --key serviceAccountKey.json
+
+  B) Fetch from the aladhan.com API for a whole year:
+       python3 tools/upload_prayer_times.py --year 2026 --key serviceAccountKey.json
 
 How to get serviceAccountKey.json:
     Firebase Console → Project Settings → Service Accounts → Generate new private key
@@ -18,6 +24,7 @@ Admin can then open any document in Firebase Console and edit a field to overrid
 """
 
 import argparse
+import json
 import time
 import requests
 import firebase_admin
@@ -87,9 +94,29 @@ def upload_year(year: int, db):
     print(f"\nDone — {total} documents written to Firestore.")
 
 
+def upload_json(path: str, db):
+    with open(path, encoding="utf-8") as f:
+        all_days = json.load(f)
+
+    collection = db.collection("prayer_times")
+    keys = sorted(all_days.keys())
+    total = 0
+    # Firestore batches max 500 writes
+    for i in range(0, len(keys), 400):
+        batch = db.batch()
+        for k in keys[i:i + 400]:
+            batch.set(collection.document(k), all_days[k])
+        batch.commit()
+        total += len(keys[i:i + 400])
+        print(f"  uploaded {total}/{len(keys)} days")
+        time.sleep(0.3)
+    print(f"\nDone — {total} documents written to Firestore.")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--year", type=int, default=2026)
+    parser.add_argument("--json", help="Path to a JSON file of times to upload")
     parser.add_argument("--key",  required=True,
                         help="Path to Firebase service account JSON key")
     args = parser.parse_args()
@@ -98,8 +125,12 @@ def main():
     firebase_admin.initialize_app(cred)
     db = firestore.client()
 
-    print(f"Uploading prayer times for {args.year} to Firestore...")
-    upload_year(args.year, db)
+    if args.json:
+        print(f"Uploading prayer times from {args.json} to Firestore...")
+        upload_json(args.json, db)
+    else:
+        print(f"Uploading prayer times for {args.year} from aladhan API...")
+        upload_year(args.year, db)
 
 
 if __name__ == "__main__":

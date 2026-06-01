@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -131,17 +132,40 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     if (!mounted) return;
     setState(() { _loading = true; _error = null; });
 
-    // 1 — Try Firestore (admin-controlled times)
+    // 1 — Try Firestore (admin overrides / edits)
     if (await _loadFromFirestore()) return;
 
-    // 2 — Try aladhan.com API
+    // 2 — Bundled official Karkh times (works offline, always present)
+    if (await _loadFromAsset()) return;
+
+    // 3 — aladhan.com API (only if the bundled year is missing)
     if (await _loadFromApi()) return;
 
-    // 3 — Offline: load from local cache
+    // 4 — Last-saved cache
     if (await _loadFromCache()) return;
 
-    // 4 — Nothing available
+    // 5 — Nothing available
     if (mounted) setState(() { _loading = false; _error = 'لا يوجد اتصال بالإنترنت'; });
+  }
+
+  // Official مواقيت الكرخ، بغداد bundled in the app (assets/prayer_times_2026.json)
+  Future<bool> _loadFromAsset() async {
+    try {
+      // Only use the asset if it covers today's year
+      final now = DateTime.now();
+      final raw = await rootBundle.loadString('assets/prayer_times_2026.json');
+      final decoded = json.decode(raw) as Map<String, dynamic>;
+      if (decoded.isEmpty) return false;
+      // Asset is for 2026 — skip if device year is different so API takes over
+      if (!decoded.keys.first.startsWith('${now.year}')) return false;
+      if (!mounted) return true;
+      setState(() { _allTimes = decoded; _loading = false; });
+      _saveCache(decoded);
+      _startCountdown();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> _loadFromFirestore() async {

@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:http/http.dart' as http;
@@ -540,16 +541,35 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     setState(() => _loading = true);
 
-    // 1 — Try Firestore
+    // 1 — Try Firestore (admin overrides)
     if (await _loadTodayFromFirestore()) return;
 
-    // 2 — Try aladhan API
+    // 2 — Bundled official Karkh times (offline, always present)
+    if (await _loadTodayFromAsset()) return;
+
+    // 3 — aladhan API (if bundled year missing)
     if (await _loadTodayFromApi()) return;
 
-    // 3 — Offline: use cached data from last successful load
+    // 4 — Last-saved cache
     if (await _loadTodayFromCache()) return;
 
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<bool> _loadTodayFromAsset() async {
+    try {
+      final now = DateTime.now();
+      final docId =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final raw = await rootBundle.loadString('assets/prayer_times_2026.json');
+      final all = json.decode(raw) as Map<String, dynamic>;
+      final data = all[docId];
+      if (data is! Map) return false;
+      _setPrayerTimes(data.map((k, v) => MapEntry(k.toString(), v.toString())));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> _loadTodayFromFirestore() async {
