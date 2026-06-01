@@ -119,9 +119,27 @@ class QuranAudioCache extends ChangeNotifier {
   bool isDownloading(int id) => _progress.containsKey(id);
 
   File _file(int id) => File('${_dir!.path}/$id.mp3');
+  File _timingFile(int id) => File('${_dir!.path}/$id.json');
 
   /// Returns a local file path if cached, otherwise null.
   String? localPath(int id) => isCached(id) ? _file(id).path : null;
+
+  /// Returns locally-saved timing bytes if present, otherwise null.
+  Future<List<double>?> localTimings(int id) async {
+    try {
+      final f = _timingFile(id);
+      if (!await f.exists()) return null;
+      final decoded = json.decode(await f.readAsString());
+      if (decoded is List) {
+        return decoded.map((e) => (e as num).toDouble()).toList();
+      } else if (decoded is Map && decoded['ayahs'] is List) {
+        return (decoded['ayahs'] as List)
+            .map((e) => (e as num).toDouble())
+            .toList();
+      }
+    } catch (_) {}
+    return null;
+  }
 
   Future<void> download(int id) async {
     if (isCached(id) || isDownloading(id)) return;
@@ -156,6 +174,16 @@ class QuranAudioCache extends ChangeNotifier {
       await sink.flush();
       await sink.close();
 
+      // Also save the per-ayah timing JSON (if it exists) so highlighting
+      // works offline. Failure here is non-fatal — audio still cached.
+      try {
+        final tRef = FirebaseStorage.instance.ref('quran_audio/$id.json');
+        final bytes = await tRef.getData(2 * 1024 * 1024);
+        if (bytes != null) {
+          await _timingFile(id).writeAsBytes(bytes);
+        }
+      } catch (_) {}
+
       _cached.add(id);
       _progress.remove(id);
       notifyListeners();
@@ -171,6 +199,8 @@ class QuranAudioCache extends ChangeNotifier {
   Future<void> delete(int id) async {
     final f = _file(id);
     if (await f.exists()) await f.delete();
+    final t = _timingFile(id);
+    if (await t.exists()) await t.delete();
     _cached.remove(id);
     notifyListeners();
   }
@@ -504,6 +534,12 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
   // as a JSON array, e.g. [0, 4.8, 11.2, ...]. Returns null if absent.
   Future<List<double>?> _loadTimings(int id) async {
     if (_timingsCache.containsKey(id)) return _timingsCache[id];
+    // Offline-first: use locally-saved timing file if the surah was downloaded
+    final local = await QuranAudioCache.instance.localTimings(id);
+    if (local != null) {
+      _timingsCache[id] = local;
+      return local;
+    }
     try {
       final ref = FirebaseStorage.instance.ref('quran_audio/$id.json');
       final bytes = await ref.getData(2 * 1024 * 1024);

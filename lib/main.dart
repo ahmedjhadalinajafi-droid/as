@@ -77,6 +77,18 @@ Future<void> main() async {
     debugPrint('Firebase init failed: $e');
   }
 
+  // Enable Firestore offline persistence — all Firestore pages (announcements,
+  // events, campaigns, social media, home slider) cache their last data and
+  // keep working without internet.
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    );
+  } catch (e) {
+    debugPrint('Firestore persistence setup failed: $e');
+  }
+
   try {
     if (!kIsWeb) {
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
