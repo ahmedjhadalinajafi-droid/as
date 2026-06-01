@@ -498,15 +498,46 @@ class _HomePageState extends State<HomePage> {
 
   static String _stripTz(String t) => t.split(' ').first;
 
+  String get _todayCacheKey {
+    final now = DateTime.now();
+    return 'pt_today_${now.year}_${now.month}_${now.day}';
+  }
+
+  Future<void> _saveTodayCache(Map<String, String> times) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_todayCacheKey, json.encode(times));
+    } catch (_) {}
+  }
+
+  Future<bool> _loadTodayFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_todayCacheKey);
+      if (raw == null) return false;
+      final decoded = json.decode(raw) as Map<String, dynamic>;
+      if (decoded.isEmpty) return false;
+      _setPrayerTimes(decoded.map((k, v) => MapEntry(k, v.toString())));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _loadPrayerTimes() async {
     if (!mounted) return;
     setState(() => _loading = true);
 
-    // 1 — Try Firestore (admin-controlled times)
+    // 1 — Try Firestore
     if (await _loadTodayFromFirestore()) return;
 
-    // 2 — Fall back to aladhan.com API
-    await _loadTodayFromApi();
+    // 2 — Try aladhan API
+    if (await _loadTodayFromApi()) return;
+
+    // 3 — Offline: use cached data from last successful load
+    if (await _loadTodayFromCache()) return;
+
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<bool> _loadTodayFromFirestore() async {
@@ -520,15 +551,17 @@ class _HomePageState extends State<HomePage> {
           .get()
           .timeout(const Duration(seconds: 5));
       if (!doc.exists || doc.data() == null) return false;
-      _setPrayerTimes(
-          Map<String, String>.from(doc.data()!.map((k, v) => MapEntry(k, v.toString()))));
+      final times =
+          Map<String, String>.from(doc.data()!.map((k, v) => MapEntry(k, v.toString())));
+      _setPrayerTimes(times);
+      _saveTodayCache(times);
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  Future<void> _loadTodayFromApi() async {
+  Future<bool> _loadTodayFromApi() async {
     final now = DateTime.now();
     final dateStr =
         '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
@@ -541,20 +574,23 @@ class _HomePageState extends State<HomePage> {
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body) as Map<String, dynamic>;
         final timings = decoded['data']['timings'] as Map<String, dynamic>;
-        _setPrayerTimes({
+        final times = {
           'fajr':     _stripTz(timings['Fajr']     as String? ?? ''),
           'sunrise':  _stripTz(timings['Sunrise']  as String? ?? ''),
           'dhuhr':    _stripTz(timings['Dhuhr']    as String? ?? ''),
           'sunset':   _stripTz(timings['Sunset']   as String? ?? ''),
           'maghrib':  _stripTz(timings['Maghrib']  as String? ?? ''),
           'midnight': _stripTz(timings['Midnight'] as String? ?? ''),
-        });
-        return;
+        };
+        _setPrayerTimes(times);
+        _saveTodayCache(times);
+        return true;
       }
+      return false;
     } catch (e) {
       debugPrint('Prayer times API error: $e');
+      return false;
     }
-    if (mounted) setState(() => _loading = false);
   }
 
   void _setPrayerTimes(Map<String, String> times) {

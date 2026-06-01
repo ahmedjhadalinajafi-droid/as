@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_service.dart';
 import 'islamic_background.dart';
 
@@ -97,6 +98,35 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     super.dispose();
   }
 
+  // SharedPreferences key for this month's cached data
+  String get _cacheKey {
+    final now = DateTime.now();
+    return 'pt_${now.year}_${now.month}';
+  }
+
+  Future<void> _saveCache(Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey, json.encode(data));
+    } catch (_) {}
+  }
+
+  Future<bool> _loadFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKey);
+      if (raw == null) return false;
+      final decoded = json.decode(raw) as Map<String, dynamic>;
+      if (decoded.isEmpty) return false;
+      if (!mounted) return true;
+      setState(() { _allTimes = decoded; _loading = false; });
+      _startCountdown();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _load() async {
     if (!mounted) return;
     setState(() { _loading = true; _error = null; });
@@ -104,8 +134,14 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     // 1 — Try Firestore (admin-controlled times)
     if (await _loadFromFirestore()) return;
 
-    // 2 — Fall back to aladhan.com API
-    await _loadFromApi();
+    // 2 — Try aladhan.com API
+    if (await _loadFromApi()) return;
+
+    // 3 — Offline: load from local cache
+    if (await _loadFromCache()) return;
+
+    // 4 — Nothing available
+    if (mounted) setState(() { _loading = false; _error = 'لا يوجد اتصال بالإنترنت'; });
   }
 
   Future<bool> _loadFromFirestore() async {
@@ -127,6 +163,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
       }
       if (!mounted) return true;
       setState(() { _allTimes = result; _loading = false; });
+      _saveCache(result);
       _startCountdown();
       return true;
     } catch (_) {
@@ -134,7 +171,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     }
   }
 
-  Future<void> _loadFromApi() async {
+  Future<bool> _loadFromApi() async {
     final now = DateTime.now();
     try {
       final uri = Uri.parse(
@@ -142,7 +179,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
         '?latitude=33.3152&longitude=44.3661&method=13',
       );
       final response = await http.get(uri).timeout(const Duration(seconds: 15));
-      if (!mounted) return;
+      if (!mounted) return false;
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body) as Map<String, dynamic>;
         final data = decoded['data'] as List;
@@ -162,12 +199,13 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
           };
         }
         setState(() { _allTimes = result; _loading = false; });
+        _saveCache(result);
         _startCountdown();
-      } else {
-        setState(() { _loading = false; _error = 'فشل تحميل البيانات (${response.statusCode})'; });
+        return true;
       }
+      return false;
     } catch (_) {
-      if (mounted) setState(() { _loading = false; _error = 'تعذّر الاتصال بالإنترنت'; });
+      return false;
     }
   }
 
