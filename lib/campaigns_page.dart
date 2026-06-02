@@ -172,10 +172,29 @@ class _TripCard extends StatelessWidget {
     final imageUrl      = data['imageUrl']       as String? ?? '';
     final price         = (data['price']         ?? '').toString();
     final seats         = (data['seats']         ?? '').toString();
-    final phone         = data['phone']          as String? ?? '';
     final description   = data['description']    as String? ?? '';
     final depDate = (data['departureDate'] as Timestamp?)?.toDate();
     final retDate = (data['returnDate']    as Timestamp?)?.toDate();
+
+    // Contacts: new array format takes priority, falls back to single phone.
+    // Array format: [ {name: "أبو علي", label: "رجال ١", phone: "964..."}, ... ]
+    final rawContacts = data['contacts'];
+    final List<Map<String, String>> contacts;
+    if (rawContacts is List && rawContacts.isNotEmpty) {
+      contacts = rawContacts
+          .whereType<Map>()
+          .map((c) => {
+                'name':  (c['name']  ?? '').toString(),
+                'label': (c['label'] ?? '').toString(),
+                'phone': (c['phone'] ?? '').toString(),
+              })
+          .where((c) => c['phone']!.isNotEmpty)
+          .toList();
+    } else {
+      // Legacy single-phone field
+      final p = data['phone'] as String? ?? '';
+      contacts = p.isNotEmpty ? [{'name': '', 'label': '', 'phone': p}] : [];
+    }
 
     final card = Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -345,37 +364,24 @@ class _TripCard extends StatelessWidget {
                   ),
 
                   // Contact buttons (hidden for ended trips)
-                  if (phone.isNotEmpty && !isPast) ...[
+                  if (contacts.isNotEmpty && !isPast) ...[
                     const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _openWhatsApp(phone),
-                            icon: const Icon(Icons.chat, size: 18),
-                            label: const Text('واتساب'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF25D366),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => _call(phone),
-                            icon: const Icon(Icons.phone, size: 18),
-                            label: const Text('اتصال'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _navy,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'للتواصل والحجز',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: _gold,
+                      ),
                     ),
+                    const SizedBox(height: 10),
+                    ...contacts.map((c) => _ContactRow(
+                          contact: c,
+                          onWhatsApp: () => _openWhatsApp(c['phone']!),
+                          onCall: () => _call(c['phone']!),
+                        )),
                   ],
                 ],
               ),
@@ -390,6 +396,106 @@ class _TripCard extends StatelessWidget {
 }
 
 // ─── Small Widgets ──────────────────────────────────────────────────────────────
+
+class _ContactRow extends StatelessWidget {
+  final Map<String, String> contact;
+  final VoidCallback onWhatsApp;
+  final VoidCallback onCall;
+  const _ContactRow({
+    required this.contact,
+    required this.onWhatsApp,
+    required this.onCall,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+    final name  = contact['name']  ?? '';
+    final label = contact['label'] ?? '';
+    final phone = contact['phone'] ?? '';
+
+    // Display: "أبو علي — رجال ١" or just whichever is available
+    final displayTitle = [name, label]
+        .where((s) => s.isNotEmpty)
+        .join('  —  ');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _gold.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          // Name + label
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (displayTitle.isNotEmpty)
+                  Text(
+                    displayTitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : _navy,
+                      fontFamily: 'ScheherazadeNew',
+                    ),
+                  ),
+                Text(
+                  phone,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withOpacity(0.55),
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // WhatsApp button
+          _ContactBtn(
+            icon: Icons.chat_rounded,
+            color: const Color(0xFF25D366),
+            onTap: onWhatsApp,
+          ),
+          const SizedBox(width: 8),
+          // Call button
+          _ContactBtn(
+            icon: Icons.phone_rounded,
+            color: _navy,
+            onTap: onCall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _ContactBtn({required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 18, color: Colors.white),
+      ),
+    );
+  }
+}
 
 class _InfoRow extends StatelessWidget {
   final IconData icon;
