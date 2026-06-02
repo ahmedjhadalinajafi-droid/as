@@ -25,13 +25,12 @@ class NotificationService {
   static final _navController = StreamController<String>.broadcast();
   static Stream<String> get navStream => _navController.stream;
 
-  static const _prayerOrder = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  // Only the three main prayers exist in the bundled times.
+  static const _prayerOrder = ['fajr', 'dhuhr', 'maghrib'];
   static const _prayerNames = {
     'fajr': 'الفجر',
     'dhuhr': 'الظهر',
-    'asr': 'العصر',
     'maghrib': 'المغرب',
-    'isha': 'العشاء',
   };
 
   Future<void> initialize() async {
@@ -40,11 +39,13 @@ class NotificationService {
     await _initTimezone();
     await _initLocal();
     await _requestPermissions();
-    _listenForeground();
-    await _setupTapHandlers();
+    // Schedule prayer alarms FIRST, before any FCM/network call, so nothing
+    // can block or delay them.
     await schedulePrayerNotifications();
+    _listenForeground();
     // Network-dependent FCM calls — never block on these. They hang with no
     // internet, so run them detached and let them fail quietly offline.
+    _setupTapHandlers();
     _subscribeTopics();
     _logToken();
   }
@@ -215,35 +216,86 @@ class NotificationService {
           final scheduled = tz.TZDateTime(tz.local, date.year, date.month, date.day, h, m);
           if (scheduled.isBefore(now)) continue;
 
-          await _local.zonedSchedule(
-            day * 10 + i,
-            'حان وقت ${_prayerNames[prayerKey]}',
-            'مسجد وحسينية أهل البيت - بغداد المنصور',
-            scheduled,
-            NotificationDetails(
-              android: AndroidNotificationDetails(
-                'prayer_times',
-                'أوقات الصلاة',
-                channelDescription: 'تنبيهات مواعيد الصلاة اليومية',
-                importance: Importance.high,
-                priority: Priority.high,
-                icon: '@mipmap/ic_launcher',
-              ),
-              iOS: const DarwinNotificationDetails(
-                presentAlert: true,
-                presentBadge: false,
-                presentSound: true,
-              ),
-            ),
-            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-            uiLocalNotificationDateInterpretation:
-                UILocalNotificationDateInterpretation.absoluteTime,
+          await _scheduleOne(
+            id: day * 10 + i,
+            title: 'حان وقت ${_prayerNames[prayerKey]}',
+            body: 'مسجد وحسينية أهل البيت - بغداد المنصور',
+            when: scheduled,
           );
         }
       }
       debugPrint('Prayer notifications scheduled');
     } catch (e) {
       debugPrint('Schedule notifications error: $e');
+    }
+  }
+
+  // Schedules a single notification. Tries exact mode first; if the device
+  // denies exact alarms (Android 12+ without the "Alarms & reminders"
+  // permission), falls back to inexact so the alarm is still delivered.
+  Future<void> _scheduleOne({
+    required int id,
+    required String title,
+    required String body,
+    required tz.TZDateTime when,
+  }) async {
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'prayer_times',
+        'أوقات الصلاة',
+        channelDescription: 'تنبيهات مواعيد الصلاة اليومية',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: false,
+        presentSound: true,
+      ),
+    );
+
+    for (final mode in [
+      AndroidScheduleMode.exactAllowWhileIdle,
+      AndroidScheduleMode.inexactAllowWhileIdle,
+    ]) {
+      try {
+        await _local.zonedSchedule(
+          id, title, body, when, details,
+          androidScheduleMode: mode,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+        return; // success
+      } catch (e) {
+        debugPrint('zonedSchedule ($mode) failed: $e');
+        // Loop falls through to inexact mode on the next iteration.
+      }
+    }
+  }
+
+  // Fires an immediate notification so the user can confirm notifications
+  // are enabled and working on their device.
+  Future<void> showTestNotification() async {
+    try {
+      await _local.show(
+        999,
+        'تم تفعيل التنبيهات ✅',
+        'ستصلك تنبيهات أوقات الصلاة في وقتها',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'prayer_times',
+            'أوقات الصلاة',
+            channelDescription: 'تنبيهات مواعيد الصلاة اليومية',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Test notification error: $e');
     }
   }
 

@@ -91,6 +91,19 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
     final newVal = !(_notifSettings[key] ?? true);
     setState(() => _notifSettings[key] = newVal);
     await NotificationService().setPrayerNotification(key, newVal);
+    // When turning a prayer alert ON, fire a test notification immediately so
+    // the user can confirm notifications are actually working on their device.
+    if (newVal) {
+      await NotificationService().showTestNotification();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم تفعيل تنبيه ${_prayerNames[key] ?? ''}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   @override
