@@ -1280,17 +1280,6 @@ class _HomeImageSliderState extends State<_HomeImageSlider> {
           .orderBy('order')
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return Container(
-            height: 190,
-            decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Center(child: CircularProgressIndicator()),
-          );
-        }
-
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) return const SizedBox.shrink();
 
@@ -1611,13 +1600,6 @@ class _HomeAnnouncementsSection extends StatelessWidget {
               .limit(3)
               .snapshots(),
           builder: (ctx, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ));
-            }
             final docs = snap.data?.docs ?? [];
             if (docs.isEmpty) {
               return Padding(

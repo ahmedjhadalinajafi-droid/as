@@ -36,9 +36,6 @@ class AnnouncementsPage extends StatelessWidget {
           if (snap.hasError) {
             return Center(child: Text('خطأ: ${snap.error}'));
           }
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
           final docs = snap.data?.docs ?? [];
           if (docs.isEmpty) {
             return Center(

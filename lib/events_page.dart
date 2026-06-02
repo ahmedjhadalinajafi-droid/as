@@ -107,9 +107,6 @@ class _EventList extends StatelessWidget {
         if (snap.hasError) {
           return _FirebaseErrorView(cs: cs);
         }
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
         final docs = snap.data?.docs ?? [];
 
         if (docs.isEmpty) {

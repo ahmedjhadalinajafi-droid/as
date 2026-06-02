@@ -41,9 +41,6 @@ class CampaignsPage extends StatelessWidget {
               stream: stream,
               builder: (ctx, snap) {
                 if (snap.hasError) return _ErrorView(cs: cs);
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
                 final docs = snap.data?.docs ?? [];
                 if (docs.isEmpty) return _EmptyView(cs: cs);
 
