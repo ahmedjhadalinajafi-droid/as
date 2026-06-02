@@ -94,7 +94,10 @@ Future<void> main() async {
     if (!kIsWeb) {
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     }
-    await NotificationService().initialize();
+    // Fire-and-forget: notification setup makes FCM network calls
+    // (subscribeToTopic, getToken) that hang with no internet. Never await
+    // it here, or the app gets stuck on the splash screen when offline.
+    NotificationService().initialize();
   } catch (e) {
     debugPrint('NotificationService init failed: $e');
   }

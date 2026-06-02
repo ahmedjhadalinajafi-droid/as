@@ -36,14 +36,17 @@ class NotificationService {
 
   Future<void> initialize() async {
     if (kIsWeb) return;
+    // Local-only setup — works fully offline, safe to await.
     await _initTimezone();
     await _initLocal();
     await _requestPermissions();
     _listenForeground();
     await _setupTapHandlers();
-    await _subscribeTopics();
-    _logToken();
     await schedulePrayerNotifications();
+    // Network-dependent FCM calls — never block on these. They hang with no
+    // internet, so run them detached and let them fail quietly offline.
+    _subscribeTopics();
+    _logToken();
   }
 
   Future<void> _initTimezone() async {
@@ -157,8 +160,12 @@ class NotificationService {
   }
 
   Future<void> _subscribeTopics() async {
-    await _messaging.subscribeToTopic('announcements');
-    await _messaging.subscribeToTopic('prayer_times');
+    try {
+      await _messaging.subscribeToTopic('announcements');
+      await _messaging.subscribeToTopic('prayer_times');
+    } catch (e) {
+      debugPrint('Topic subscription failed (offline?): $e');
+    }
   }
 
   Future<void> _logToken() async {
