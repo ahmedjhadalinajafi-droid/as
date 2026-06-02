@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'islamic_background.dart';
 
 // Admin email — only this account can add/delete announcements
@@ -171,12 +172,25 @@ class _AnnouncementCard extends StatelessWidget {
         .delete();
   }
 
+  Future<void> _openLink(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذّر فتح الرابط')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final title = data['title'] as String? ?? '';
     final body = data['body'] as String? ?? '';
     final imageUrl = data['imageUrl'] as String? ?? '';
+    final linkUrl = data['linkUrl'] as String? ?? '';
     final ts = data['createdAt'] as Timestamp?;
     final dateStr = ts != null
         ? DateFormat('d MMMM yyyy', 'ar').format(ts.toDate())
@@ -224,6 +238,29 @@ class _AnnouncementCard extends StatelessWidget {
                 if (body.isNotEmpty)
                   Text(body,
                       style: const TextStyle(fontSize: 15, height: 1.6)),
+                if (linkUrl.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _openLink(context, linkUrl),
+                      icon: const Icon(Icons.smart_display_rounded,
+                          color: Colors.white, size: 20),
+                      label: const Text('شاهد على يوتيوب',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF0000),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
                 if (dateStr.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Row(
@@ -275,6 +312,7 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _body = TextEditingController();
+  final _link = TextEditingController();
   XFile? _image;
   Uint8List? _imageBytes;
   bool _uploading = false;
@@ -283,6 +321,7 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
   void dispose() {
     _title.dispose();
     _body.dispose();
+    _link.dispose();
     super.dispose();
   }
 
@@ -316,6 +355,7 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
         'title': _title.text.trim(),
         'body': _body.text.trim(),
         'imageUrl': imageUrl,
+        'linkUrl': _link.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -414,6 +454,19 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
                 validator: (v) => (v == null || v.trim().isEmpty)
                     ? 'يرجى إدخال نص الإعلان'
                     : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _link,
+                keyboardType: TextInputType.url,
+                decoration: InputDecoration(
+                  labelText: 'رابط يوتيوب (اختياري)',
+                  hintText: 'https://youtube.com/...',
+                  prefixIcon: const Icon(Icons.smart_display_rounded,
+                      color: Color(0xFFFF0000)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(

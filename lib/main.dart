@@ -15,6 +15,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'announcements_page.dart';
 import 'campaigns_page.dart';
@@ -1843,6 +1844,7 @@ class _HomeAnnouncementsSection extends StatelessWidget {
                 final title = d['title'] as String? ?? '';
                 final body = d['body'] as String? ?? '';
                 final imageUrl = d['imageUrl'] as String? ?? '';
+                final linkUrl = d['linkUrl'] as String? ?? '';
                 final ts = d['createdAt'] as Timestamp?;
                 final dateStr = ts != null
                     ? _formatDate(ts.toDate())
@@ -1887,6 +1889,40 @@ class _HomeAnnouncementsSection extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                       fontSize: 14, height: 1.5)),
+                            if (linkUrl.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () async {
+                                    final uri = Uri.tryParse(linkUrl);
+                                    if (uri != null) {
+                                      await launchUrl(uri,
+                                          mode: LaunchMode.externalApplication);
+                                    }
+                                  },
+                                  icon: const Icon(
+                                      Icons.smart_display_rounded,
+                                      color: Colors.white,
+                                      size: 18),
+                                  label: const Text('شاهد على يوتيوب',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        const Color(0xFFFF0000),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 9),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ),
+                            ],
                             if (dateStr.isNotEmpty) ...[
                               const SizedBox(height: 8),
                               Text(dateStr,
