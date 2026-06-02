@@ -322,7 +322,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
     _NavItem(icon: Icons.access_time_outlined,selectedIcon: Icons.access_time_filled,   label: 'الصلاة'),
     _NavItem(icon: Icons.people_outline,      selectedIcon: Icons.people_rounded,       label: 'تواصل'),
     _NavItem(icon: Icons.event_outlined,      selectedIcon: Icons.event_rounded,        label: 'الفعاليات'),
-    _NavItem(icon: Icons.volunteer_activism_outlined, selectedIcon: Icons.volunteer_activism, label: 'الحملات'),
+    _NavItem(icon: Icons.directions_bus_outlined, selectedIcon: Icons.directions_bus_filled, label: 'الحملات'),
     _NavItem(icon: Icons.grid_view_outlined,  selectedIcon: Icons.grid_view_rounded,    label: 'المزيد'),
   ];
 
