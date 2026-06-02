@@ -119,8 +119,8 @@
 
     </LinearLayout>
 
-    <!-- Prayer times grid — 5 prayers in 2 rows -->
-    <!-- Row 1: Fajr, Dhuhr, Asr -->
+    <!-- Prayer times grid — 6 prayers in 2 rows -->
+    <!-- Row 1: Fajr, Sunrise, Dhuhr -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -168,12 +168,12 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="الظهر"
+                android:text="الشروق"
                 android:textColor="#99E8D5A3"
                 android:textSize="9sp"
                 android:gravity="center" />
             <TextView
-                android:id="@+id/tv_dhuhr"
+                android:id="@+id/tv_sunrise"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="#FFFFFFFF"
@@ -196,12 +196,12 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="العصر"
+                android:text="الظهر"
                 android:textColor="#99E8D5A3"
                 android:textSize="9sp"
                 android:gravity="center" />
             <TextView
-                android:id="@+id/tv_asr"
+                android:id="@+id/tv_dhuhr"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="#FFFFFFFF"
@@ -213,12 +213,39 @@
 
     </LinearLayout>
 
-    <!-- Row 2: Maghrib, Isha (centred) -->
+    <!-- Row 2: Sunset, Maghrib, Midnight -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_horizontal">
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/widget_cell_bg"
+            android:padding="5dp"
+            android:layout_marginLeft="2dp"
+            android:layout_marginRight="2dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="الغروب"
+                android:textColor="#99E8D5A3"
+                android:textSize="9sp"
+                android:gravity="center" />
+            <TextView
+                android:id="@+id/tv_sunset"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="monospace" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -261,12 +288,12 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="العشاء"
+                android:text="منتصف الليل"
                 android:textColor="#99E8D5A3"
                 android:textSize="9sp"
                 android:gravity="center" />
             <TextView
-                android:id="@+id/tv_isha"
+                android:id="@+id/tv_midnight"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="#FFFFFFFF"
@@ -275,12 +302,6 @@
                 android:gravity="center"
                 android:fontFamily="monospace" />
         </LinearLayout>
-
-        <!-- Filler third column to keep symmetry -->
-        <View
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
 
     </LinearLayout>
 

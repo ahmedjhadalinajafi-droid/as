@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hijri/hijri_calendar.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -706,7 +707,24 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _updateWidget(Map<String, String> times) async {
-    // Widget update removed — home_widget plugin removed
+    try {
+      // Push today's prayer times to the native home-screen widget.
+      await HomeWidget.saveWidgetData<String>('fajr',     times['fajr'] ?? '--:--');
+      await HomeWidget.saveWidgetData<String>('sunrise',  times['sunrise'] ?? '--:--');
+      await HomeWidget.saveWidgetData<String>('dhuhr',    times['dhuhr'] ?? '--:--');
+      await HomeWidget.saveWidgetData<String>('sunset',   times['sunset'] ?? '--:--');
+      await HomeWidget.saveWidgetData<String>('maghrib',  times['maghrib'] ?? '--:--');
+      await HomeWidget.saveWidgetData<String>('midnight', times['midnight'] ?? '--:--');
+      await HomeWidget.saveWidgetData<String>('next_prayer', _nextPrayer);
+      await HomeWidget.saveWidgetData<String>('next_prayer_time', _nextPrayerTime);
+      await HomeWidget.updateWidget(
+        androidName: 'MasjidWidgetProvider',
+        qualifiedAndroidName: 'com.example.masjid_app.MasjidWidgetProvider',
+        name: 'MasjidWidgetProvider',
+      );
+    } catch (e) {
+      debugPrint('Widget update error: $e');
+    }
   }
 
   String _todayKey() {

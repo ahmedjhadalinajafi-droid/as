@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetPlugin
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -23,8 +24,8 @@ class MasjidWidgetProvider : AppWidgetProvider() {
 
     companion object {
 
-        private fun toDisplay(time24: String): String {
-            if (time24 == "--:--" || time24.isEmpty()) return "--:--"
+        private fun toDisplay(time24: String?): String {
+            if (time24.isNullOrEmpty() || time24 == "--:--") return "--:--"
             return try {
                 val sdf24 = SimpleDateFormat("HH:mm", Locale.getDefault())
                 val sdf12 = SimpleDateFormat("h:mm a", Locale.ENGLISH)
@@ -41,7 +42,7 @@ class MasjidWidgetProvider : AppWidgetProvider() {
         }
 
         private fun findNextPrayer(
-            fajr: String, dhuhr: String, asr: String, maghrib: String, isha: String
+            fajr: String, dhuhr: String, maghrib: String
         ): Pair<String, String> {
             val now = Calendar.getInstance()
             val nowMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
@@ -49,9 +50,7 @@ class MasjidWidgetProvider : AppWidgetProvider() {
             val prayers = listOf(
                 Pair("الفجر", fajr),
                 Pair("الظهر", dhuhr),
-                Pair("العصر", asr),
-                Pair("المغرب", maghrib),
-                Pair("العشاء", isha)
+                Pair("المغرب", maghrib)
             )
 
             for ((name, time) in prayers) {
@@ -70,16 +69,15 @@ class MasjidWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             widgetId: Int
         ) {
-            val prefs = context.getSharedPreferences(
-                "${context.packageName}.home_widget",
-                Context.MODE_PRIVATE
-            )
+            // Data written by the Flutter side via the home_widget plugin.
+            val prefs = HomeWidgetPlugin.getData(context)
 
-            val fajr    = prefs.getString("fajr",    "--:--") ?: "--:--"
-            val dhuhr   = prefs.getString("dhuhr",   "--:--") ?: "--:--"
-            val asr     = prefs.getString("asr",     "--:--") ?: "--:--"
-            val maghrib = prefs.getString("maghrib", "--:--") ?: "--:--"
-            val isha    = prefs.getString("isha",    "--:--") ?: "--:--"
+            val fajr     = prefs.getString("fajr",     "--:--") ?: "--:--"
+            val sunrise  = prefs.getString("sunrise",  "--:--") ?: "--:--"
+            val dhuhr    = prefs.getString("dhuhr",    "--:--") ?: "--:--"
+            val sunset   = prefs.getString("sunset",   "--:--") ?: "--:--"
+            val maghrib  = prefs.getString("maghrib",  "--:--") ?: "--:--"
+            val midnight = prefs.getString("midnight", "--:--") ?: "--:--"
 
             val storedNext     = prefs.getString("next_prayer",      "") ?: ""
             val storedNextTime = prefs.getString("next_prayer_time", "") ?: ""
@@ -87,7 +85,7 @@ class MasjidWidgetProvider : AppWidgetProvider() {
             val (nextName, nextTime) = if (storedNext.isNotEmpty() && storedNextTime.isNotEmpty()) {
                 Pair(storedNext, storedNextTime)
             } else {
-                findNextPrayer(fajr, dhuhr, asr, maghrib, isha)
+                findNextPrayer(fajr, dhuhr, maghrib)
             }
 
             val views = RemoteViews(context.packageName, R.layout.masjid_widget)
@@ -95,11 +93,12 @@ class MasjidWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.tv_date,      todayDateStr())
             views.setTextViewText(R.id.tv_next_name, nextName)
             views.setTextViewText(R.id.tv_next_time, toDisplay(nextTime))
-            views.setTextViewText(R.id.tv_fajr,    toDisplay(fajr))
-            views.setTextViewText(R.id.tv_dhuhr,   toDisplay(dhuhr))
-            views.setTextViewText(R.id.tv_asr,     toDisplay(asr))
-            views.setTextViewText(R.id.tv_maghrib, toDisplay(maghrib))
-            views.setTextViewText(R.id.tv_isha,    toDisplay(isha))
+            views.setTextViewText(R.id.tv_fajr,     toDisplay(fajr))
+            views.setTextViewText(R.id.tv_sunrise,  toDisplay(sunrise))
+            views.setTextViewText(R.id.tv_dhuhr,    toDisplay(dhuhr))
+            views.setTextViewText(R.id.tv_sunset,   toDisplay(sunset))
+            views.setTextViewText(R.id.tv_maghrib,  toDisplay(maghrib))
+            views.setTextViewText(R.id.tv_midnight, toDisplay(midnight))
 
             val intent = Intent(context, MainActivity::class.java)
             val pendingIntent = PendingIntent.getActivity(
