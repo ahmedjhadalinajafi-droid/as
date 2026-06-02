@@ -832,6 +832,9 @@ class _HomePageState extends State<HomePage> {
                           _buildQuickActions(context, cs),
                           const SizedBox(height: 20),
 
+                          // Featured (boosted) events
+                          const _HomeFeaturedEvents(),
+
                           // Announcements
                           const _HomeAnnouncementsSection(),
                           const SizedBox(height: 20),
@@ -1554,6 +1557,208 @@ class _DayWorshipTabs extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+// ─── Home Featured (Boosted) Events ──────────────────────────────────────────
+// Shows events with field boosted == true, set from the Firebase Console.
+
+class _HomeFeaturedEvents extends StatelessWidget {
+  const _HomeFeaturedEvents();
+
+  static const _navy = Color(0xFF1B3D6F);
+  static const _gold = Color(0xFFC9A843);
+
+  static String _arDate(DateTime d) {
+    const months = [
+      'يناير','فبراير','مارس','أبريل','مايو','يونيو',
+      'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('events')
+          .where('boosted', isEqualTo: true)
+          .snapshots(),
+      builder: (ctx, snap) {
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) return const SizedBox.shrink();
+
+        // Newest first (client-side; avoids a composite index).
+        final items = docs.map((d) => d.data() as Map<String, dynamic>).toList()
+          ..sort((a, b) {
+            final at = (a['date'] as Timestamp?)?.toDate() ?? DateTime(2000);
+            final bt = (b['date'] as Timestamp?)?.toDate() ?? DateTime(2000);
+            return bt.compareTo(at);
+          });
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.star, size: 18, color: _gold),
+                  const SizedBox(width: 8),
+                  Text(
+                    'فعاليات مميزة',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : _navy,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 190,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, i) {
+                  final e = items[i];
+                  final title = e['title'] as String? ?? '';
+                  final imageUrl = e['imageUrl'] as String? ?? '';
+                  final date = (e['date'] as Timestamp?)?.toDate();
+                  return GestureDetector(
+                    onTap: () {
+                      final shell =
+                          context.findAncestorStateOfType<_MainShellState>();
+                      shell?.setState(() => shell._currentIndex = 3);
+                    },
+                    child: Container(
+                      width: 260,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E2D4A) : Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: _gold, width: 1.4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _gold.withOpacity(0.3),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Stack(
+                              children: [
+                                imageUrl.isNotEmpty
+                                    ? CachedNetworkImage(
+                                        imageUrl: imageUrl,
+                                        height: 110,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, __) => Container(
+                                          height: 110,
+                                          color: _navy.withOpacity(0.08),
+                                        ),
+                                        errorWidget: (_, __, ___) => Container(
+                                          height: 110,
+                                          color: _navy.withOpacity(0.08),
+                                          child: const Icon(Icons.event,
+                                              color: Colors.white38, size: 32),
+                                        ),
+                                      )
+                                    : Container(
+                                        height: 110,
+                                        color: _navy.withOpacity(0.08),
+                                        child: const Icon(Icons.event,
+                                            color: Colors.white38, size: 32),
+                                      ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [_gold, Color(0xFFE0C66A)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.star,
+                                            size: 11, color: Colors.white),
+                                        SizedBox(width: 3),
+                                        Text('مميز',
+                                            style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.white : _navy,
+                                      fontFamily: 'ScheherazadeNew',
+                                    ),
+                                  ),
+                                  if (date != null) ...[
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.calendar_today,
+                                            size: 12,
+                                            color: cs.onSurface.withOpacity(0.5)),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          _arDate(date),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: cs.onSurface.withOpacity(0.6),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        );
+      },
     );
   }
 }

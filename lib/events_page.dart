@@ -127,11 +127,20 @@ class _EventList extends StatelessWidget {
           );
         }
 
+        // Boosted (مميز) events pinned to the top of the list.
+        final sorted = [...docs];
+        sorted.sort((a, b) {
+          final aB = ((a.data() as Map)['boosted'] as bool?) ?? false;
+          final bB = ((b.data() as Map)['boosted'] as bool?) ?? false;
+          if (aB == bB) return 0;
+          return aB ? -1 : 1;
+        });
+
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-          itemCount: docs.length,
+          itemCount: sorted.length,
           itemBuilder: (ctx, i) {
-            final data = docs[i].data() as Map<String, dynamic>;
+            final data = sorted[i].data() as Map<String, dynamic>;
             return _EventCard(data: data, isPast: !upcoming);
           },
         );
@@ -160,6 +169,7 @@ class _EventCard extends StatelessWidget {
     final category    = data['category']    as String? ?? 'فعالية';
     final ts          = data['date']        as Timestamp?;
     final date        = ts?.toDate();
+    final boosted     = (data['boosted']    as bool?) ?? false;
 
     final catData = _categories.firstWhere(
       (c) => c.$1 == category,
@@ -172,15 +182,25 @@ class _EventCard extends StatelessWidget {
         color: isDark ? const Color(0xFF1E2D4A) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-            color: _navy.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
+          if (boosted)
+            BoxShadow(
+              color: _gold.withOpacity(0.45),
+              blurRadius: 20,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
+            )
+          else
+            BoxShadow(
+              color: _navy.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
         ],
         border: Border.all(
-          color: isPast ? cs.outline.withOpacity(0.1) : _gold.withOpacity(0.25),
-          width: 0.8,
+          color: boosted
+              ? _gold
+              : (isPast ? cs.outline.withOpacity(0.1) : _gold.withOpacity(0.25)),
+          width: boosted ? 1.6 : 0.8,
         ),
       ),
       child: ClipRRect(
@@ -277,29 +297,61 @@ class _EventCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Category chip
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: catData.$3.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(catData.$2, size: 12, color: catData.$3),
-                              const SizedBox(width: 4),
-                              Text(
-                                category,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: catData.$3,
-                                  fontWeight: FontWeight.bold,
+                        // Category chip + boosted badge
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: catData.$3.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(catData.$2, size: 12, color: catData.$3),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    category,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: catData.$3,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (boosted)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [_gold, Color(0xFFE0C66A)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.star, size: 12, color: Colors.white),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'مميز',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
+                          ],
                         ),
                         const SizedBox(height: 8),
 

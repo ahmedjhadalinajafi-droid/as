@@ -44,13 +44,22 @@ class CampaignsPage extends StatelessWidget {
                 final docs = snap.data?.docs ?? [];
                 if (docs.isEmpty) return _EmptyView(cs: cs);
 
+                // Active campaigns first, ended ones dimmed at the bottom.
+                final sorted = [...docs];
+                sorted.sort((a, b) {
+                  final aEnded = ((a.data() as Map)['ended'] as bool?) ?? false;
+                  final bEnded = ((b.data() as Map)['ended'] as bool?) ?? false;
+                  if (aEnded == bEnded) return 0;
+                  return aEnded ? 1 : -1;
+                });
+
                 return ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                   physics: const BouncingScrollPhysics(
                       parent: AlwaysScrollableScrollPhysics()),
-                  itemCount: docs.length,
+                  itemCount: sorted.length,
                   itemBuilder: (ctx, i) {
-                    final data = docs[i].data() as Map<String, dynamic>;
+                    final data = sorted[i].data() as Map<String, dynamic>;
                     return _CampaignCard(data: data, isDark: isDark);
                   },
                 );
@@ -78,8 +87,9 @@ class _CampaignCard extends StatelessWidget {
     final goal = data['goal'] as String? ?? '';
     final ts = data['date'] as Timestamp?;
     final date = ts?.toDate();
+    final ended = (data['ended'] as bool?) ?? false;
 
-    return Container(
+    final card = Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E2D4A) : Colors.white,
@@ -91,7 +101,12 @@ class _CampaignCard extends StatelessWidget {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: _gold.withOpacity(0.25), width: 0.8),
+        border: Border.all(
+          color: ended
+              ? cs.outline.withOpacity(0.15)
+              : _gold.withOpacity(0.25),
+          width: 0.8,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -100,17 +115,33 @@ class _CampaignCard extends StatelessWidget {
           children: [
             // Image
             if (imageUrl.isNotEmpty)
-              CachedNetworkImage(
-                imageUrl: imageUrl,
-                height: 180,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(
-                  height: 180,
-                  color: _navy.withOpacity(0.08),
-                  child: const Center(child: CircularProgressIndicator()),
-                ),
-                errorWidget: (_, __, ___) => const SizedBox.shrink(),
+              Stack(
+                children: [
+                  CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    height: 180,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      height: 180,
+                      color: _navy.withOpacity(0.08),
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                  if (ended)
+                    Container(
+                      height: 180,
+                      color: Colors.black.withOpacity(0.4),
+                      child: const Center(
+                        child: Text('منتهية',
+                            style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                ],
               ),
 
             Padding(
@@ -119,29 +150,60 @@ class _CampaignCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Banner chip
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _gold.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.volunteer_activism,
-                            size: 12, color: _gold),
-                        SizedBox(width: 4),
-                        Text(
-                          'حملة',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: _gold,
-                            fontWeight: FontWeight.bold,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _gold.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.volunteer_activism,
+                                size: 12, color: _gold),
+                            SizedBox(width: 4),
+                            Text(
+                              'حملة',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _gold,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (ended) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_outline,
+                                  size: 12, color: cs.onSurface.withOpacity(0.5)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'منتهية',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: cs.onSurface.withOpacity(0.6),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
                   const SizedBox(height: 10),
 
@@ -221,6 +283,9 @@ class _CampaignCard extends StatelessWidget {
         ),
       ),
     );
+
+    // Ended campaigns are faded out.
+    return ended ? Opacity(opacity: 0.6, child: card) : card;
   }
 }
 
