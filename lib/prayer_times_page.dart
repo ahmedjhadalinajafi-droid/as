@@ -179,8 +179,8 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
           '${nextMonth.year}-${nextMonth.month.toString().padLeft(2, '0')}-31';
       final snap = await FirebaseFirestore.instance
           .collection('prayer_times')
-          .where(FieldPath.documentId(), isGreaterThanOrEqualTo: start)
-          .where(FieldPath.documentId(), isLessThanOrEqualTo: end)
+          .where(FieldPath.documentId, isGreaterThanOrEqualTo: start)
+          .where(FieldPath.documentId, isLessThanOrEqualTo: end)
           .get()
           .timeout(const Duration(seconds: 6));
       if (snap.docs.isEmpty) return false;
