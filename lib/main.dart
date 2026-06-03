@@ -1886,7 +1886,6 @@ class _HomeAnnouncementsSection extends StatelessWidget {
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('announcements')
-              .orderBy('createdAt', descending: true)
               .limit(3)
               .snapshots(),
           builder: (ctx, snap) {
