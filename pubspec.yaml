@@ -48,9 +48,6 @@ dependencies:
   # URL Launcher — opens social media links
   url_launcher: ^6.2.5
 
-  # Home-screen widget (prayer times)
-  home_widget: ^0.6.0
-
   cupertino_icons: ^1.0.2
 
 dev_dependencies:
