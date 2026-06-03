@@ -852,7 +852,7 @@ class _HomePageState extends State<HomePage> {
                           const SizedBox(height: 12),
 
                           // YouTube channel shortcut
-                          _YoutubeChannelBanner(),
+                          const _YoutubeChannelBanner(),
                           const SizedBox(height: 20),
 
                           // Featured (boosted) events
@@ -977,6 +977,8 @@ class _HomePageState extends State<HomePage> {
 // ─── YouTube Channel Banner ───────────────────────────────────────────────────
 
 class _YoutubeChannelBanner extends StatelessWidget {
+  const _YoutubeChannelBanner();
+
   static const _ytUrl = 'https://youtube.com/@MasjidAhlAlBaitBaghdad';
 
   @override
