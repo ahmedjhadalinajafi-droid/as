@@ -1,0 +1,39 @@
+# تشغيل n8n + جسر Baileys معًا على نفس الخادم (مثلاً جهاز i7-7700)
+# Ollama يعمل على جهاز Mac mini M4 بشكل منفصل (انظر README).
+#
+#   docker compose up -d
+#   docker compose logs -f baileys     # لرؤية رمز QR ومسحه
+#
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=Asia/Baghdad
+      - TZ=Asia/Baghdad
+      - N8N_SECURE_COOKIE=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # ملف المعرفة يصبح متاحًا داخل n8n على المسار /data/knowledge.md
+      - ./knowledge:/data
+
+  baileys:
+    build: ./baileys-bridge
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # داخل شبكة docker، يُنادى n8n باسم الخدمة "n8n"
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/masjid-bot
+      - PORT=3000
+      - AUTH_DIR=/app/auth_info
+    volumes:
+      # حفظ جلسة واتساب حتى لا تُمسح عند إعادة التشغيل
+      - ./baileys-bridge/auth_info:/app/auth_info
+    depends_on:
+      - n8n
+
+volumes:
+  n8n_data:

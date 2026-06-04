@@ -1,0 +1,4 @@
+node_modules/
+.env
+*.log
+baileys-bridge/auth_info/
