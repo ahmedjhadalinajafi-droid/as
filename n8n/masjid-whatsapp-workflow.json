@@ -1,5 +1,5 @@
 {
-  "name": "Masjid WhatsApp Q&A (Baileys + Ollama)",
+  "name": "Masjid WhatsApp Q&A (Baileys + DeepSeek/Gemini)",
   "nodes": [
     {
       "parameters": {
@@ -67,23 +67,45 @@
     },
     {
       "parameters": {
-        "model": "qwen2.5:7b",
+        "model": "deepseek-chat",
         "options": {
           "temperature": 0.2
         }
       },
       "id": "55555555-5555-5555-5555-555555555555",
-      "name": "Qwen2.5 (Ollama)",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "name": "DeepSeek (API)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
       "typeVersion": 1,
       "position": [
-        760,
+        620,
         240
       ],
       "credentials": {
-        "ollamaApi": {
-          "id": "REPLACE_WITH_YOUR_OLLAMA_CREDENTIAL",
-          "name": "Ollama (Mac Mini M4)"
+        "deepSeekApi": {
+          "id": "REPLACE_WITH_DEEPSEEK_CREDENTIAL",
+          "name": "DeepSeek API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "77777777-7777-7777-7777-777777777777",
+      "name": "Gemini (API)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        900,
+        240
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL",
+          "name": "Google Gemini API"
         }
       }
     },
@@ -103,6 +125,22 @@
       "position": [
         1040,
         0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔁 تبديل نموذج الذكاء الاصطناعي\nهناك عقدتان جاهزتان:\n• **DeepSeek (API)** — موصولة افتراضيًا.\n• **Gemini (API)** — بديلة.\n\nللتبديل: احذف وصلة النموذج الحالي إلى «Generate Answer»،\nثم اسحب وصلة من النموذج الآخر إليها. (نموذج واحد فقط في كل مرّة.)\n\nضع **مفتاح API** في بيانات الاعتماد داخل كل عقدة.\nDeepSeek: deepseek-chat · Gemini: models/gemini-2.0-flash",
+        "height": 260,
+        "width": 360,
+        "color": 4
+      },
+      "id": "88888888-8888-8888-8888-888888888888",
+      "name": "How to switch model",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        560,
+        420
       ]
     }
   ],
@@ -151,7 +189,7 @@
         ]
       ]
     },
-    "Qwen2.5 (Ollama)": {
+    "DeepSeek (API)": {
       "ai_languageModel": [
         [
           {
