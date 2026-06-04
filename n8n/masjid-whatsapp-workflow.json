@@ -89,7 +89,7 @@
     },
     {
       "parameters": {
-        "modelName": "models/gemini-2.0-flash",
+        "modelName": "models/gemini-3.5-flash",
         "options": {
           "temperature": 0.3
         }
@@ -129,7 +129,7 @@
     },
     {
       "parameters": {
-        "content": "## 🔁 تبديل نموذج الذكاء الاصطناعي\nهناك عقدتان جاهزتان:\n• **DeepSeek (API)** — موصولة افتراضيًا.\n• **Gemini (API)** — بديلة.\n\nللتبديل: احذف وصلة النموذج الحالي إلى «Generate Answer»،\nثم اسحب وصلة من النموذج الآخر إليها. (نموذج واحد فقط في كل مرّة.)\n\nضع **مفتاح API** في بيانات الاعتماد داخل كل عقدة.\nDeepSeek: deepseek-chat · Gemini: models/gemini-2.0-flash",
+        "content": "## 🔁 تبديل نموذج الذكاء الاصطناعي\nهناك عقدتان جاهزتان:\n• **DeepSeek (API)** — موصولة افتراضيًا.\n• **Gemini (API)** — بديلة.\n\nللتبديل: احذف وصلة النموذج الحالي إلى «Generate Answer»،\nثم اسحب وصلة من النموذج الآخر إليها. (نموذج واحد فقط في كل مرّة.)\n\nضع **مفتاح API** في بيانات الاعتماد داخل كل عقدة.\nDeepSeek: deepseek-chat · Gemini: models/gemini-3.5-flash",
         "height": 260,
         "width": 360,
         "color": 4
