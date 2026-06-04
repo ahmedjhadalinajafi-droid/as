@@ -2,8 +2,11 @@
 // جسر يربط واتساب (عبر Baileys) بـ n8n:
 //   1) يستقبل رسائل المصلّين ويرسلها إلى n8n (Webhook).
 //   2) يوفّر مسار /send لكي يرسل n8n الإجابة إلى المصلّي.
+//   3) يوفّر مسار /knowledge ليقرأ n8n ملف المعرفة عبر HTTP (دون أي تعديل على حاوية n8n).
 require('dotenv').config();
 
+const fs = require('fs').promises;
+const path = require('path');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -16,9 +19,11 @@ const axios = require('axios');
 const pino = require('pino');
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/masjid-bot';
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = parseInt(process.env.PORT || '3100', 10);
 const API_TOKEN = process.env.API_TOKEN || ''; // سرّ اختياري لحماية مسار /send
 const AUTH_DIR = process.env.AUTH_DIR || 'auth_info';
+const KNOWLEDGE_PATH =
+  process.env.KNOWLEDGE_PATH || path.join(__dirname, '..', 'knowledge', 'knowledge.md');
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'silent' });
 let sock; // يُعاد إنشاؤه عند إعادة الاتصال
@@ -109,12 +114,23 @@ async function handleIncoming(msg) {
   );
 }
 
-// ----- خادم HTTP: يستدعيه n8n لإرسال الإجابة إلى المصلّي -----
+// ----- خادم HTTP -----
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true, connected: !!sock?.user }));
 
+// يقرأ n8n ملف المعرفة من هنا (طازجًا في كل مرّة، فأي تعديل ينعكس فورًا)
+app.get('/knowledge', async (_req, res) => {
+  try {
+    const knowledge = await fs.readFile(KNOWLEDGE_PATH, 'utf8');
+    res.json({ knowledge });
+  } catch (e) {
+    res.status(404).json({ error: 'knowledge file not found', path: KNOWLEDGE_PATH });
+  }
+});
+
+// يستدعيه n8n لإرسال الإجابة إلى المصلّي
 app.post('/send', async (req, res) => {
   if (API_TOKEN && req.headers['x-api-token'] !== API_TOKEN) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
@@ -133,7 +149,7 @@ app.post('/send', async (req, res) => {
 });
 
 app.listen(PORT, () =>
-  console.log(`🌐  خادم HTTP جاهز على المنفذ :${PORT}  (POST /send, GET /health)`),
+  console.log(`🌐  خادم HTTP جاهز على المنفذ :${PORT}  (GET /knowledge, POST /send, GET /health)`),
 );
 
 startSock().catch((e) => {

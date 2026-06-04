@@ -1,39 +1,25 @@
-# تشغيل n8n + جسر Baileys معًا على نفس الخادم (مثلاً جهاز i7-7700)
-# Ollama يعمل على جهاز Mac mini M4 بشكل منفصل (انظر README).
+# جسر Baileys فقط — n8n لديك يعمل مسبقًا (لا نشغّل n8n هنا).
+# Only the Baileys bridge — you already run n8n separately.
 #
-#   docker compose up -d
-#   docker compose logs -f baileys     # لرؤية رمز QR ومسحه
+#   docker compose up -d --build
+#   docker compose logs -f          # لرؤية رمز QR ومسحه
 #
 services:
-  n8n:
-    image: n8nio/n8n:latest
-    restart: unless-stopped
-    ports:
-      - "5678:5678"
-    environment:
-      - GENERIC_TIMEZONE=Asia/Baghdad
-      - TZ=Asia/Baghdad
-      - N8N_SECURE_COOKIE=false
-    volumes:
-      - n8n_data:/home/node/.n8n
-      # ملف المعرفة يصبح متاحًا داخل n8n على المسار /data/knowledge.md
-      - ./knowledge:/data
-
-  baileys:
+  masjid-bot:
     build: ./baileys-bridge
+    container_name: masjid-bot
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3100:3100"            # 3000 مشغول لديك (openspeedtest) لذا نستخدم 3100
     environment:
-      # داخل شبكة docker، يُنادى n8n باسم الخدمة "n8n"
-      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/masjid-bot
-      - PORT=3000
+      - PORT=3100
+      # الجسر ينادي n8n عبر بوابة المضيف (يصل إلى منفذ n8n المنشور 5678)
+      - N8N_WEBHOOK_URL=http://host.docker.internal:5678/webhook/masjid-bot
+      - KNOWLEDGE_PATH=/app/knowledge/knowledge.md
       - AUTH_DIR=/app/auth_info
+      - LOG_LEVEL=silent
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
-      # حفظ جلسة واتساب حتى لا تُمسح عند إعادة التشغيل
-      - ./baileys-bridge/auth_info:/app/auth_info
-    depends_on:
-      - n8n
-
-volumes:
-  n8n_data:
+      - ./baileys-bridge/auth_info:/app/auth_info   # حفظ جلسة واتساب
+      - ./knowledge:/app/knowledge                  # ملف المعرفة (عدّله على المضيف)
