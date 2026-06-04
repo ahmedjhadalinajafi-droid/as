@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "url": "http://YOUR_SERVER_IP:3100/knowledge",
+        "url": "http://192.168.68.115:3100/knowledge",
         "options": {}
       },
       "id": "22222222-2222-2222-2222-222222222222",
@@ -96,7 +96,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://YOUR_SERVER_IP:3100/send",
+        "url": "http://192.168.68.115:3100/send",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ to: $('WhatsApp In (Webhook)').item.json.from, text: $json.text }) }}",
