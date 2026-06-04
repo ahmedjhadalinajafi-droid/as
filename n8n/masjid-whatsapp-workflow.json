@@ -73,23 +73,28 @@
     },
     {
       "parameters": {
-        "modelName": "models/gemini-3.5-flash",
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gemini-3.5-flash",
+          "cachedResultName": "gemini-3.5-flash"
+        },
         "options": {
           "temperature": 0.3
         }
       },
       "id": "77777777-7777-7777-7777-777777777777",
-      "name": "Gemini (API)",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1,
+      "name": "Gemini 3.5 (OpenAI node)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
       "position": [
         680,
         240
       ],
       "credentials": {
-        "googlePalmApi": {
-          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL",
-          "name": "Google Gemini API"
+        "openAiApi": {
+          "id": "REPLACE_WITH_OPENAI_CREDENTIAL",
+          "name": "Gemini (Google OpenAI-compat)"
         }
       }
     },
@@ -113,7 +118,7 @@
     },
     {
       "parameters": {
-        "content": "## 🔁 تبديل نموذج الذكاء الاصطناعي\nعقدتان جاهزتان:\n• **Gemini (API)** — موصولة افتراضيًا (Gemini 3.5 Flash).\n• **DeepSeek (API)** — بديلة.\n\nللتبديل: احذف وصلة النموذج الحالي إلى «Generate Answer»،\nثم اسحب وصلة من النموذج الآخر إليها. (نموذج واحد فقط في كل مرّة.)\n\nضع **مفتاح API** في بيانات الاعتماد داخل كل عقدة.",
+        "content": "## 🤖 نموذج الذكاء الاصطناعي\n**Gemini 3.5 (OpenAI node)** — موصول افتراضيًا.\nيستخدم نقطة نهاية Google المتوافقة مع OpenAI (لتفادي خطأ host).\n\nعند إنشاء بيانات الاعتماد (نوع OpenAI):\n• API Key = مفتاح Google (AIza...)\n• Base URL = https://generativelanguage.googleapis.com/v1beta/openai\n\nالبديل: **DeepSeek (API)** — وصّلها بـ «Generate Answer» للتبديل.",
         "height": 240,
         "width": 360,
         "color": 4
@@ -162,7 +167,7 @@
         ]
       ]
     },
-    "Gemini (API)": {
+    "Gemini 3.5 (OpenAI node)": {
       "ai_languageModel": [
         [
           {
