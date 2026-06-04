@@ -118,7 +118,7 @@
     },
     {
       "parameters": {
-        "content": "## 🤖 نموذج الذكاء الاصطناعي\n**Gemini 3.5 (OpenAI node)** — موصول افتراضيًا.\nيستخدم نقطة نهاية Google المتوافقة مع OpenAI (لتفادي خطأ host).\n\nعند إنشاء بيانات الاعتماد (نوع OpenAI):\n• API Key = مفتاح Google (AIza...)\n• Base URL = https://generativelanguage.googleapis.com/v1beta/openai\n\nالبديل: **DeepSeek (API)** — وصّلها بـ «Generate Answer» للتبديل.",
+        "content": "## 🤖 نموذج الذكاء الاصطناعي\n**DeepSeek (API)** — موصول افتراضيًا.\nبيانات الاعتماد: ضع **API Key** فقط (مفتاح DeepSeek). النموذج: deepseek-chat.\n\nالبديل: **Gemini 3.5 (OpenAI node)** — يحتاج بيانات اعتماد نوع OpenAI مع:\nBase URL = https://generativelanguage.googleapis.com/v1beta/openai\n\nللتبديل: احذف وصلة النموذج إلى «Generate Answer» واسحب وصلة من النموذج الآخر.",
         "height": 240,
         "width": 360,
         "color": 4
@@ -167,7 +167,7 @@
         ]
       ]
     },
-    "Gemini 3.5 (OpenAI node)": {
+    "DeepSeek (API)": {
       "ai_languageModel": [
         [
           {
