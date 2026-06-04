@@ -6,7 +6,9 @@
 #
 services:
   masjid-bot:
-    build: ./baileys-bridge
+    build:
+      context: ./baileys-bridge
+      network: host          # يستخدم شبكة المضيف أثناء البناء لتفادي مشاكل DNS مع npm
     container_name: masjid-bot
     restart: unless-stopped
     ports:
