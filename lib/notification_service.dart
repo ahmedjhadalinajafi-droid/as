@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -48,6 +49,7 @@ class NotificationService {
     _setupTapHandlers();
     _subscribeTopics();
     _logToken();
+    startQuestionListeners();
   }
 
   Future<void> _initTimezone() async {
@@ -309,4 +311,94 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     return {for (final k in _prayerOrder) k: prefs.getBool('notif_$k') ?? true};
   }
+
+  // Starts Firestore-based listeners so the app shows local notifications
+  // when a question arrives (admin) or gets answered (client), even while
+  // the app is in the background. Requires Firestore to be reachable.
+  Future<void> startQuestionListeners() async {
+    if (kIsWeb) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isAdmin = prefs.getBool('ask_device_admin') ?? false;
+      if (isAdmin) _listenForNewQuestions();
+
+      final myIds = prefs.getStringList('my_questions') ?? [];
+      if (myIds.isNotEmpty) _listenForAnswers(myIds);
+    } catch (e) {
+      debugPrint('startQuestionListeners error: $e');
+    }
+  }
+
+  void _listenForNewQuestions() {
+    bool initialized = false;
+    final seen = <String>{};
+
+    FirebaseFirestore.instance
+        .collection('questions')
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snap) {
+      if (!initialized) {
+        seen.addAll(snap.docs.map((d) => d.id));
+        initialized = true;
+        return;
+      }
+      for (final doc in snap.docs) {
+        if (seen.contains(doc.id)) continue;
+        seen.add(doc.id);
+        final q = (doc.data()['question'] as String? ?? '');
+        final preview = q.length > 70 ? '${q.substring(0, 70)}…' : q;
+        _local.show(
+          doc.id.hashCode.abs() % 800 + 100,
+          'سؤال جديد 📩',
+          preview,
+          _announcementDetails,
+          payload: 'questions',
+        );
+      }
+    }, onError: (e) => debugPrint('Admin question listener: $e'));
+  }
+
+  void _listenForAnswers(List<String> myIds) {
+    final ids = myIds.take(10).toList();
+    bool initialized = false;
+    final notified = <String>{};
+
+    FirebaseFirestore.instance
+        .collection('questions')
+        .where(FieldPath.documentId, whereIn: ids)
+        .snapshots()
+        .listen((snap) {
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (data['status'] != 'answered') continue;
+        if (notified.contains(doc.id)) continue;
+        notified.add(doc.id);
+        if (!initialized) continue; // skip already-answered on first load
+        final a = data['answer'] as String? ?? '';
+        final preview = a.length > 70 ? '${a.substring(0, 70)}…' : a;
+        _local.show(
+          doc.id.hashCode.abs() % 800 + 1000,
+          'تم الرد على سؤالك ✅',
+          preview.isEmpty ? 'افتح التطبيق لمشاهدة الجواب' : preview,
+          _announcementDetails,
+          payload: 'questions',
+        );
+      }
+      initialized = true;
+    }, onError: (e) => debugPrint('Client answer listener: $e'));
+  }
+
+  static const _announcementDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'announcements',
+      'الإعلانات',
+      channelDescription: 'إعلانات وأخبار المسجد',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    ),
+    iOS: DarwinNotificationDetails(
+        presentAlert: true, presentBadge: true, presentSound: true),
+  );
 }

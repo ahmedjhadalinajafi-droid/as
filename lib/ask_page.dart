@@ -1,12 +1,15 @@
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'islamic_background.dart';
 
 const _deviceAdminKey = 'ask_device_admin';
-// Secret phrase typed as a question to activate admin on this device.
-// To remove admin: type the same phrase again.
 const _adminSecret = 'MasjidAhlAlBait-Admin-Baghdad-Mansour-2026';
 
 const _navy = Color(0xFF1B3D6F);
@@ -33,11 +36,27 @@ class _AskPageState extends State<AskPage> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _myIds = (prefs.getStringList('my_questions') ?? []).toSet();
-        _isAdmin = prefs.getBool(_deviceAdminKey) ?? false;
-      });
+    if (!mounted) return;
+    final isAdmin = prefs.getBool(_deviceAdminKey) ?? false;
+    setState(() {
+      _myIds = (prefs.getStringList('my_questions') ?? []).toSet();
+      _isAdmin = isAdmin;
+    });
+    if (isAdmin) _saveAdminToken();
+  }
+
+  Future<void> _saveAdminToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await FirebaseFirestore.instance
+            .collection('config')
+            .doc('admin_device')
+            .set({'fcmToken': token, 'updatedAt': FieldValue.serverTimestamp()},
+                SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('Save admin token: $e');
     }
   }
 
@@ -58,7 +77,7 @@ class _AskPageState extends State<AskPage> {
               tabs: [
                 const Tab(text: 'أسئلتي'),
                 if (_isAdmin) const Tab(text: 'الأسئلة والأجوبة'),
-                if (_isAdmin) const Tab(text: 'بانتظار الرد'),
+                if (_isAdmin) _PendingBadgeTab(),
               ],
             ),
           ),
@@ -82,7 +101,7 @@ class _AskPageState extends State<AskPage> {
   }
 
   Future<void> _askQuestion() async {
-    final result = await showModalBottomSheet<Map<String, String>>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -90,60 +109,140 @@ class _AskPageState extends State<AskPage> {
     );
     if (result == null) return;
 
-    // Secret admin activation — not sent to Firestore
-    if (result['question']?.trim() == _adminSecret) {
+    final questionText = (result['question'] as String? ?? '').trim();
+
+    // Secret admin toggle
+    if (questionText == _adminSecret) {
       final prefs = await SharedPreferences.getInstance();
       final current = prefs.getBool(_deviceAdminKey) ?? false;
       await prefs.setBool(_deviceAdminKey, !current);
       await _load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(!current
-                ? 'تم تفعيل صلاحيات المشرف على هذا الجهاز ✅'
-                : 'تم إلغاء صلاحيات المشرف من هذا الجهاز'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(!current
+              ? 'تم تفعيل صلاحيات المشرف ✅'
+              : 'تم إلغاء صلاحيات المشرف'),
+          behavior: SnackBarBehavior.floating,
+        ));
       }
       return;
     }
 
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('جارٍ إرسال السؤال...'),
+      duration: Duration(seconds: 60),
+      behavior: SnackBarBehavior.floating,
+    ));
+
     try {
-      final doc = await FirebaseFirestore.instance.collection('questions').add({
-        'question': result['question'],
-        'name': result['name'] ?? '',
+      String clientToken = '';
+      try {
+        clientToken = await FirebaseMessaging.instance.getToken() ?? '';
+      } catch (_) {}
+
+      final docRef =
+          FirebaseFirestore.instance.collection('questions').doc();
+
+      // Upload question image if provided
+      String imageUrl = '';
+      final imageFile = result['image'] as XFile?;
+      if (imageFile != null) {
+        imageUrl = await _uploadImage(
+            File(imageFile.path), 'questions/${docRef.id}/question.jpg');
+      }
+
+      await docRef.set({
+        'question': questionText,
+        'name': result['name'] as String? ?? '',
         'answer': '',
+        'imageUrl': imageUrl,
+        'answerImageUrl': '',
         'status': 'pending',
         'askedAt': FieldValue.serverTimestamp(),
+        'clientFcmToken': clientToken,
+      });
+
+      // Queue push notification for admin
+      final preview = questionText.length > 80
+          ? '${questionText.substring(0, 80)}...'
+          : questionText;
+      await FirebaseFirestore.instance.collection('notification_queue').add({
+        'type': 'new_question',
+        'questionId': docRef.id,
+        'questionPreview': preview,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       final prefs = await SharedPreferences.getInstance();
       final ids = prefs.getStringList('my_questions') ?? [];
-      ids.add(doc.id);
+      ids.add(docRef.id);
       await prefs.setStringList('my_questions', ids);
       await _load();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إرسال سؤالك ✅ سيظهر الجواب في "أسئلتي"'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('تم إرسال سؤالك ✅ سيظهر الجواب في "أسئلتي"'),
+          behavior: SnackBarBehavior.floating,
+        ));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('فشل إرسال السؤال: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 6),
-          ),
-        );
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('فشل إرسال السؤال: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 6),
+        ));
       }
     }
+  }
+
+  Future<String> _uploadImage(File file, String path) async {
+    final ref = FirebaseStorage.instance.ref(path);
+    await ref.putFile(file);
+    return await ref.getDownloadURL();
+  }
+}
+
+// ─── Pending Badge Tab ────────────────────────────────────────────────────────
+
+class _PendingBadgeTab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('questions')
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (ctx, snap) {
+        final count = snap.data?.docs.length ?? 0;
+        return Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('بانتظار الرد'),
+              if (count > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text('$count',
+                      style: const TextStyle(
+                          fontSize: 11, color: Colors.white)),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -168,7 +267,9 @@ class _MyQuestionsTab extends StatelessWidget {
           .where(FieldPath.documentId, whereIn: ids)
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
+        if (snap.hasError) {
+          return Center(child: Text('خطأ: ${snap.error}'));
+        }
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -208,7 +309,9 @@ class _PublicQATab extends StatelessWidget {
           .where('status', isEqualTo: 'answered')
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
+        if (snap.hasError) {
+          return Center(child: Text('خطأ: ${snap.error}'));
+        }
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -235,7 +338,7 @@ class _PublicQATab extends StatelessWidget {
   }
 }
 
-// ─── Pending Tab (admin only) ─────────────────────────────────────────────────
+// ─── Pending Tab ──────────────────────────────────────────────────────────────
 
 class _PendingTab extends StatelessWidget {
   const _PendingTab();
@@ -248,7 +351,9 @@ class _PendingTab extends StatelessWidget {
           .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
+        if (snap.hasError) {
+          return Center(child: Text('خطأ: ${snap.error}'));
+        }
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -276,11 +381,10 @@ class _QACard extends StatelessWidget {
   final Map<String, dynamic> data;
   final String docId;
   final bool showAdminActions;
-  const _QACard({
-    required this.data,
-    required this.docId,
-    required this.showAdminActions,
-  });
+  const _QACard(
+      {required this.data,
+      required this.docId,
+      required this.showAdminActions});
 
   @override
   Widget build(BuildContext context) {
@@ -291,35 +395,34 @@ class _QACard extends StatelessWidget {
     final name = data['name'] as String? ?? '';
     final status = data['status'] as String? ?? 'pending';
     final answered = status == 'answered' && answer.isNotEmpty;
+    final imageUrl = data['imageUrl'] as String? ?? '';
+    final answerImageUrl = data['answerImageUrl'] as String? ?? '';
     final ts = data['askedAt'] as Timestamp?;
-    final dateStr = ts != null
-        ? DateFormat('d MMMM yyyy', 'ar').format(ts.toDate())
-        : '';
+    final dateStr =
+        ts != null ? DateFormat('d MMMM yyyy', 'ar').format(ts.toDate()) : '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Question
+            // Question text
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.help_outline_rounded, color: _navy, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    question,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : _navy,
-                      height: 1.5,
-                    ),
-                  ),
+                  child: Text(question,
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : _navy,
+                          height: 1.5)),
                 ),
               ],
             ),
@@ -333,10 +436,14 @@ class _QACard extends StatelessWidget {
                         color: cs.onSurface.withOpacity(0.5))),
               ),
             ],
+            // Question image
+            if (imageUrl.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _NetworkImage(url: imageUrl),
+            ],
             const SizedBox(height: 10),
-
-            // Answer or pending badge
-            if (answered)
+            // Answer section
+            if (answered) ...[
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
@@ -349,33 +456,34 @@ class _QACard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: const [
-                        Icon(Icons.verified_rounded,
-                            color: Color(0xFF1B7A4B), size: 18),
-                        SizedBox(width: 6),
-                        Text('الجواب',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1B7A4B))),
-                      ],
-                    ),
+                    Row(children: const [
+                      Icon(Icons.verified_rounded,
+                          color: Color(0xFF1B7A4B), size: 18),
+                      SizedBox(width: 6),
+                      Text('الجواب',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1B7A4B))),
+                    ]),
                     const SizedBox(height: 6),
                     Text(answer,
                         style:
                             const TextStyle(fontSize: 14, height: 1.6)),
+                    if (answerImageUrl.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _NetworkImage(url: answerImageUrl),
+                    ],
                   ],
                 ),
-              )
-            else
+              ),
+            ] else ...[
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _gold.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                    color: _gold.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -389,7 +497,7 @@ class _QACard extends StatelessWidget {
                   ],
                 ),
               ),
-
+            ],
             const SizedBox(height: 8),
             Row(
               children: [
@@ -401,7 +509,7 @@ class _QACard extends StatelessWidget {
                 const Spacer(),
                 if (showAdminActions) ...[
                   TextButton.icon(
-                    onPressed: () => _answer(context, answered),
+                    onPressed: () => _openAnswerDialog(context, answered),
                     icon: Icon(answered ? Icons.edit : Icons.reply,
                         size: 18, color: _navy),
                     label: Text(answered ? 'تعديل' : 'رد',
@@ -421,42 +529,62 @@ class _QACard extends StatelessWidget {
     );
   }
 
-  Future<void> _answer(BuildContext context, bool editing) async {
-    final controller =
-        TextEditingController(text: data['answer'] as String? ?? '');
-    final result = await showDialog<String>(
+  Future<void> _openAnswerDialog(BuildContext context, bool editing) async {
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(editing ? 'تعديل الجواب' : 'كتابة الجواب'),
-        content: TextField(
-          controller: controller,
-          maxLines: 6,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'اكتب الجواب هنا...',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('إلغاء')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('نشر الجواب')),
-        ],
-      ),
+      builder: (_) => _AnswerDialog(
+          existing: editing ? (data['answer'] as String? ?? '') : ''),
     );
-    if (result == null || result.isEmpty) return;
-    await FirebaseFirestore.instance
-        .collection('questions')
-        .doc(docId)
-        .update({
-      'answer': result,
-      'status': 'answered',
-      'answeredAt': FieldValue.serverTimestamp(),
-    });
+    if (result == null) return;
+
+    final answerText = (result['answer'] as String? ?? '').trim();
+    if (answerText.isEmpty) return;
+
+    try {
+      String answerImageUrl = data['answerImageUrl'] as String? ?? '';
+      final imageFile = result['image'] as XFile?;
+      if (imageFile != null) {
+        final ref =
+            FirebaseStorage.instance.ref('questions/$docId/answer.jpg');
+        await ref.putFile(File(imageFile.path));
+        answerImageUrl = await ref.getDownloadURL();
+      }
+
+      await FirebaseFirestore.instance
+          .collection('questions')
+          .doc(docId)
+          .update({
+        'answer': answerText,
+        'answerImageUrl': answerImageUrl,
+        'status': 'answered',
+        'answeredAt': FieldValue.serverTimestamp(),
+      });
+
+      // Queue push notification for the client
+      final clientToken = data['clientFcmToken'] as String? ?? '';
+      if (clientToken.isNotEmpty) {
+        final preview = answerText.length > 80
+            ? '${answerText.substring(0, 80)}...'
+            : answerText;
+        await FirebaseFirestore.instance
+            .collection('notification_queue')
+            .add({
+          'type': 'answered',
+          'clientToken': clientToken,
+          'questionId': docId,
+          'answerPreview': preview,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('فشل نشر الجواب: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
   }
 
   Future<void> _delete(BuildContext context) async {
@@ -484,6 +612,91 @@ class _QACard extends StatelessWidget {
   }
 }
 
+// ─── Answer Dialog ────────────────────────────────────────────────────────────
+
+class _AnswerDialog extends StatefulWidget {
+  final String existing;
+  const _AnswerDialog({required this.existing});
+
+  @override
+  State<_AnswerDialog> createState() => _AnswerDialogState();
+}
+
+class _AnswerDialogState extends State<_AnswerDialog> {
+  late final TextEditingController _ctrl;
+  XFile? _image;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.existing);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pick() async {
+    final file = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 75, maxWidth: 1200);
+    if (file != null) setState(() => _image = file);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.existing.isEmpty ? 'كتابة الجواب' : 'تعديل الجواب'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _ctrl,
+              maxLines: 6,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'اكتب الجواب هنا...',
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (_image != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(File(_image!.path),
+                    height: 140, fit: BoxFit.cover),
+              ),
+              const SizedBox(height: 8),
+            ],
+            OutlinedButton.icon(
+              onPressed: _pick,
+              icon: const Icon(Icons.image_outlined),
+              label: Text(
+                  _image == null ? 'إضافة صورة (اختياري)' : 'تغيير الصورة'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء')),
+        ElevatedButton(
+            onPressed: () {
+              final t = _ctrl.text.trim();
+              if (t.isEmpty) return;
+              Navigator.pop(context, {'answer': t, 'image': _image});
+            },
+            child: const Text('نشر الجواب')),
+      ],
+    );
+  }
+}
+
 // ─── Ask Sheet ────────────────────────────────────────────────────────────────
 
 class _AskSheet extends StatefulWidget {
@@ -496,12 +709,19 @@ class _AskSheet extends StatefulWidget {
 class _AskSheetState extends State<_AskSheet> {
   final _question = TextEditingController();
   final _name = TextEditingController();
+  XFile? _image;
 
   @override
   void dispose() {
     _question.dispose();
     _name.dispose();
     super.dispose();
+  }
+
+  Future<void> _pick() async {
+    final file = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 75, maxWidth: 1200);
+    if (file != null) setState(() => _image = file);
   }
 
   @override
@@ -557,15 +777,48 @@ class _AskSheetState extends State<_AskSheet> {
                     borderRadius: BorderRadius.circular(12)),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
+            // Image preview + picker
+            if (_image != null) ...[
+              Stack(children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.file(File(_image!.path),
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _image = null),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle),
+                      padding: const EdgeInsets.all(4),
+                      child: const Icon(Icons.close,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 8),
+            ],
+            OutlinedButton.icon(
+              onPressed: _pick,
+              icon: const Icon(Icons.image_outlined),
+              label: Text(
+                  _image == null ? 'إضافة صورة (اختياري)' : 'تغيير الصورة'),
+            ),
+            const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () {
                 final q = _question.text.trim();
                 if (q.isEmpty) return;
-                Navigator.pop(context, {
-                  'question': q,
-                  'name': _name.text.trim(),
-                });
+                Navigator.pop(context,
+                    {'question': q, 'name': _name.text.trim(), 'image': _image});
               },
               icon: const Icon(Icons.send_rounded),
               label: const Text('إرسال السؤال'),
@@ -580,6 +833,31 @@ class _AskSheetState extends State<_AskSheet> {
             const SizedBox(height: 8),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Shared image widget ──────────────────────────────────────────────────────
+
+class _NetworkImage extends StatelessWidget {
+  final String url;
+  const _NetworkImage({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: CachedNetworkImage(
+        imageUrl: url,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Container(
+          height: 140,
+          color: Colors.grey[200],
+          child: const Center(child: CircularProgressIndicator()),
+        ),
+        errorWidget: (_, __, ___) => const SizedBox.shrink(),
       ),
     );
   }
@@ -604,8 +882,7 @@ class _EmptyState extends StatelessWidget {
           Text(text,
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 15,
-                  color: cs.onSurface.withOpacity(0.6))),
+                  fontSize: 15, color: cs.onSurface.withOpacity(0.6))),
         ],
       ),
     );
