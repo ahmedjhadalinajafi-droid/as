@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'announcements_page.dart';
+import 'ask_page.dart';
 import 'campaigns_page.dart';
 import 'date_converter_page.dart';
 import 'events_page.dart';
@@ -830,6 +831,10 @@ class _HomePageState extends State<HomePage> {
 
                           // YouTube channel shortcut
                           const _YoutubeChannelBanner(),
+                          const SizedBox(height: 12),
+
+                          // Ask a question shortcut
+                          const _AskQuestionBanner(),
                           const SizedBox(height: 20),
 
                           // Featured (boosted) events
@@ -1019,6 +1024,88 @@ class _YoutubeChannelBanner extends StatelessWidget {
               ),
               child: const Text(
                 'اشترك',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Ask Question Banner ──────────────────────────────────────────────────────
+
+class _AskQuestionBanner extends StatelessWidget {
+  const _AskQuestionBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const Directionality(
+            textDirection: TextDirection.rtl,
+            child: AskPage(),
+          ),
+        ),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF512DA8), Color(0xFF673AB7)],
+            begin: Alignment.centerRight,
+            end: Alignment.centerLeft,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF673AB7).withOpacity(0.30),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.question_answer_rounded,
+                color: Colors.white, size: 30),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'هل لديك سؤال؟',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'اطرح سؤالك وسيصلك الجواب',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.20),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'اسأل',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 13,
@@ -2080,6 +2167,12 @@ class MorePage extends StatelessWidget {
         label: 'الزيارات',
         color: const Color(0xFF795548),
         page: const ZiyaratPage(),
+      ),
+      _MoreItem(
+        icon: Icons.question_answer_rounded,
+        label: 'الأسئلة والأجوبة',
+        color: const Color(0xFF673AB7),
+        page: const AskPage(),
       ),
     ];
 
