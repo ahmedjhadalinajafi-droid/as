@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'islamic_background.dart';
+import 'notification_service.dart';
 
 const _deviceAdminKey = 'ask_device_admin';
 const _adminSecret = 'MasjidAhlAlBait-Admin-Baghdad-Mansour-2026';
@@ -116,6 +117,8 @@ class _AskPageState extends State<AskPage> {
       final current = prefs.getBool(_deviceAdminKey) ?? false;
       await prefs.setBool(_deviceAdminKey, !current);
       await _load();
+      // Restart listeners so this device starts getting new-question alerts.
+      NotificationService().startQuestionListeners();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(!current
@@ -181,6 +184,9 @@ class _AskPageState extends State<AskPage> {
       ids.add(docRef.id);
       await prefs.setStringList('my_questions', ids);
       await _load();
+      // Restart the answer listener so a notification fires when THIS
+      // question gets answered.
+      NotificationService().startQuestionListeners();
 
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
@@ -710,6 +716,8 @@ class _AskSheetState extends State<_AskSheet> {
   final _question = TextEditingController();
   final _name = TextEditingController();
   XFile? _image;
+  String? _nameError;
+  String? _questionError;
 
   @override
   void dispose() {
@@ -755,25 +763,37 @@ class _AskSheetState extends State<_AskSheet> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             TextField(
+              controller: _name,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: 'الاسم *',
+                hintText: 'اكتب اسمك',
+                prefixIcon: const Icon(Icons.person_outline),
+                errorText: _nameError,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onChanged: (_) {
+                if (_nameError != null) setState(() => _nameError = null);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
               controller: _question,
               maxLines: 4,
-              autofocus: true,
               decoration: InputDecoration(
-                labelText: 'سؤالك',
+                labelText: 'سؤالك *',
                 hintText: 'اكتب سؤالك هنا...',
+                errorText: _questionError,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12)),
                 alignLabelWithHint: true,
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _name,
-              decoration: InputDecoration(
-                labelText: 'الاسم (اختياري)',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
+              onChanged: (_) {
+                if (_questionError != null) {
+                  setState(() => _questionError = null);
+                }
+              },
             ),
             const SizedBox(height: 10),
             if (_image != null) ...[
@@ -812,9 +832,14 @@ class _AskSheetState extends State<_AskSheet> {
             ElevatedButton.icon(
               onPressed: () {
                 final q = _question.text.trim();
-                if (q.isEmpty) return;
+                final n = _name.text.trim();
+                setState(() {
+                  _nameError = n.isEmpty ? 'يرجى كتابة الاسم' : null;
+                  _questionError = q.isEmpty ? 'يرجى كتابة السؤال' : null;
+                });
+                if (q.isEmpty || n.isEmpty) return;
                 Navigator.pop(context,
-                    {'question': q, 'name': _name.text.trim(), 'image': _image});
+                    {'question': q, 'name': n, 'image': _image});
               },
               icon: const Icon(Icons.send_rounded),
               label: const Text('إرسال السؤال'),

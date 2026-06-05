@@ -315,9 +315,19 @@ class NotificationService {
   // Starts Firestore-based listeners so the app shows local notifications
   // when a question arrives (admin) or gets answered (client), even while
   // the app is in the background. Requires Firestore to be reachable.
+  StreamSubscription? _adminSub;
+  StreamSubscription? _answerSub;
+
   Future<void> startQuestionListeners() async {
     if (kIsWeb) return;
     try {
+      // Cancel any existing listeners first so restarting doesn't create
+      // duplicate subscriptions (which would fire duplicate notifications).
+      await _adminSub?.cancel();
+      await _answerSub?.cancel();
+      _adminSub = null;
+      _answerSub = null;
+
       final prefs = await SharedPreferences.getInstance();
       final isAdmin = prefs.getBool('ask_device_admin') ?? false;
       if (isAdmin) _listenForNewQuestions();
@@ -333,7 +343,7 @@ class NotificationService {
     bool initialized = false;
     final seen = <String>{};
 
-    FirebaseFirestore.instance
+    _adminSub = FirebaseFirestore.instance
         .collection('questions')
         .where('status', isEqualTo: 'pending')
         .snapshots()
@@ -364,7 +374,7 @@ class NotificationService {
     bool initialized = false;
     final notified = <String>{};
 
-    FirebaseFirestore.instance
+    _answerSub = FirebaseFirestore.instance
         .collection('questions')
         .where(FieldPath.documentId, whereIn: ids)
         .snapshots()
