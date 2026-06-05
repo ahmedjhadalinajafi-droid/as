@@ -9,6 +9,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'backend_config.dart';
 import 'islamic_background.dart';
 
 // Admin email — only this account can add/delete announcements
@@ -354,15 +355,21 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
     setState(() => _uploading = true);
 
     try {
+      // Prefer hosted image (Hostinger); fall back to base64-in-Firestore.
+      String imageUrl = '';
       String imageBase64 = '';
       if (_imageBytes != null) {
-        final encoded = base64Encode(_imageBytes!);
-        if (encoded.length <= 700000) imageBase64 = encoded;
+        imageUrl = await Backend.uploadImage(_imageBytes!) ?? '';
+        if (imageUrl.isEmpty) {
+          final encoded = base64Encode(_imageBytes!);
+          if (encoded.length <= 700000) imageBase64 = encoded;
+        }
       }
 
       await FirebaseFirestore.instance.collection('announcements').add({
         'title': _title.text.trim(),
         'body': _body.text.trim(),
+        'imageUrl': imageUrl,
         'imageBase64': imageBase64,
         'linkUrl': _link.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),

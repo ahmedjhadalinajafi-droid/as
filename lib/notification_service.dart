@@ -330,7 +330,18 @@ class NotificationService {
 
       final prefs = await SharedPreferences.getInstance();
       final isAdmin = prefs.getBool('ask_device_admin') ?? false;
-      if (isAdmin) _listenForNewQuestions();
+      if (isAdmin) {
+        _listenForNewQuestions();
+        // Subscribe so the Hostinger server can push new-question alerts to
+        // this admin device even when the app is closed.
+        try {
+          await _messaging.subscribeToTopic('admin_questions');
+        } catch (_) {}
+      } else {
+        try {
+          await _messaging.unsubscribeFromTopic('admin_questions');
+        } catch (_) {}
+      }
 
       final myIds = prefs.getStringList('my_questions') ?? [];
       if (myIds.isNotEmpty) _listenForAnswers(myIds);

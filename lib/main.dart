@@ -18,6 +18,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'announcements_page.dart';
 import 'ask_page.dart';
+import 'backend_config.dart';
 import 'campaigns_page.dart';
 import 'date_converter_page.dart';
 import 'events_page.dart';
@@ -276,6 +277,10 @@ class _MainShellState extends State<MainShell> {
     _navSub = NotificationService.navStream.listen((page) {
       final idx = _pageIndexMap[page];
       if (idx != null && mounted) setState(() => _currentIndex = idx);
+    });
+    // After first frame, check the Hostinger version.json for a newer build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Backend.checkForUpdate(context);
     });
   }
 

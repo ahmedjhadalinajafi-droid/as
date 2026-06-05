@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'backend_config.dart';
 import 'islamic_background.dart';
 
 const _navy = Color(0xFF1B3D6F);
@@ -615,16 +616,21 @@ class _AddEventPageState extends State<_AddEventPage> {
     setState(() => _uploading = true);
 
     try {
+      // Prefer hosted image (Hostinger); fall back to base64-in-Firestore.
+      String imageUrl = '';
       String imageBase64 = '';
       if (_imageBytes != null) {
-        final encoded = base64Encode(_imageBytes!);
-        if (encoded.length <= 700000) {
-          imageBase64 = encoded;
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('الصورة كبيرة جداً، سيتم النشر بدون صورة'),
-            behavior: SnackBarBehavior.floating,
-          ));
+        imageUrl = await Backend.uploadImage(_imageBytes!) ?? '';
+        if (imageUrl.isEmpty) {
+          final encoded = base64Encode(_imageBytes!);
+          if (encoded.length <= 700000) {
+            imageBase64 = encoded;
+          } else if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('الصورة كبيرة جداً، سيتم النشر بدون صورة'),
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
         }
       }
 
@@ -633,6 +639,7 @@ class _AddEventPageState extends State<_AddEventPage> {
         'description': _description.text.trim(),
         'location': _location.text.trim(),
         'category': _category,
+        'imageUrl': imageUrl,
         'imageBase64': imageBase64,
         'boosted': _boosted,
         'date': Timestamp.fromDate(_date!),

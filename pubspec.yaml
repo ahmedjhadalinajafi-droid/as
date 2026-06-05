@@ -50,6 +50,9 @@ dependencies:
   # Home-screen prayer times widget (Android + iOS)
   home_widget: ^0.6.0
 
+  # Reads the app version for the "update available" check
+  package_info_plus: ^8.0.0
+
   cupertino_icons: ^1.0.2
 
 dev_dependencies:

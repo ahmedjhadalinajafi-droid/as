@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'backend_config.dart';
 import 'islamic_background.dart';
 import 'notification_service.dart';
 
@@ -143,16 +145,21 @@ class _AskPageState extends State<AskPage> {
         clientToken = await FirebaseMessaging.instance.getToken() ?? '';
       } catch (_) {}
 
-      // Encode image to base64 (stored directly in Firestore — free plan)
+      // Prefer hosted image (Hostinger); fall back to base64-in-Firestore.
+      String imageUrl = '';
       String imageBase64 = '';
       final imageFile = result['image'] as XFile?;
       if (imageFile != null) {
-        imageBase64 = await _encodeImage(imageFile);
-        if (imageBase64.isEmpty && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('الصورة كبيرة جداً، سيتم إرسال السؤال بدون صورة'),
-            behavior: SnackBarBehavior.floating,
-          ));
+        final bytes = await imageFile.readAsBytes();
+        imageUrl = await Backend.uploadImage(bytes) ?? '';
+        if (imageUrl.isEmpty) {
+          imageBase64 = await _encodeImage(imageFile);
+          if (imageBase64.isEmpty && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('الصورة كبيرة جداً، سيتم إرسال السؤال بدون صورة'),
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
         }
       }
 
@@ -161,6 +168,7 @@ class _AskPageState extends State<AskPage> {
         'question': questionText,
         'name': result['name'] as String? ?? '',
         'answer': '',
+        'imageUrl': imageUrl,
         'imageBase64': imageBase64,
         'answerImageBase64': '',
         'status': 'pending',
@@ -168,16 +176,12 @@ class _AskPageState extends State<AskPage> {
         'clientFcmToken': clientToken,
       });
 
-      // Queue push notification for admin
+      // Push "new question" to admin devices via the Hostinger server (works
+      // even when the admin app is closed).
       final preview = questionText.length > 80
           ? '${questionText.substring(0, 80)}...'
           : questionText;
-      await FirebaseFirestore.instance.collection('notification_queue').add({
-        'type': 'new_question',
-        'questionId': docRef.id,
-        'questionPreview': preview,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      await Backend.notifyNewQuestion(preview);
 
       final prefs = await SharedPreferences.getInstance();
       final ids = prefs.getStringList('my_questions') ?? [];
@@ -407,6 +411,8 @@ class _QACard extends StatelessWidget {
     final answered = status == 'answered' && answer.isNotEmpty;
     final imageBase64 = data['imageBase64'] as String? ?? '';
     final answerImageBase64 = data['answerImageBase64'] as String? ?? '';
+    final imageUrl = data['imageUrl'] as String? ?? '';
+    final answerImageUrl = data['answerImageUrl'] as String? ?? '';
     final ts = data['askedAt'] as Timestamp?;
     final dateStr =
         ts != null ? DateFormat('d MMMM yyyy', 'ar').format(ts.toDate()) : '';
@@ -444,9 +450,9 @@ class _QACard extends StatelessWidget {
                         color: cs.onSurface.withOpacity(0.5))),
               ),
             ],
-            if (imageBase64.isNotEmpty) ...[
+            if (imageUrl.isNotEmpty || imageBase64.isNotEmpty) ...[
               const SizedBox(height: 10),
-              _Base64Image(data: imageBase64),
+              _QAImage(url: imageUrl, base64: imageBase64),
             ],
             const SizedBox(height: 10),
             if (answered) ...[
@@ -475,9 +481,11 @@ class _QACard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(answer,
                         style: const TextStyle(fontSize: 14, height: 1.6)),
-                    if (answerImageBase64.isNotEmpty) ...[
+                    if (answerImageUrl.isNotEmpty ||
+                        answerImageBase64.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      _Base64Image(data: answerImageBase64),
+                      _QAImage(
+                          url: answerImageUrl, base64: answerImageBase64),
                     ],
                   ],
                 ),
@@ -546,13 +554,19 @@ class _QACard extends StatelessWidget {
     if (answerText.isEmpty) return;
 
     try {
+      String answerImageUrl = data['answerImageUrl'] as String? ?? '';
       String answerImageBase64 = data['answerImageBase64'] as String? ?? '';
       final imageFile = result['image'] as XFile?;
       if (imageFile != null) {
         try {
           final bytes = await imageFile.readAsBytes();
-          final encoded = base64Encode(bytes);
-          if (encoded.length <= 700000) answerImageBase64 = encoded;
+          final url = await Backend.uploadImage(bytes);
+          if (url != null) {
+            answerImageUrl = url;
+          } else {
+            final encoded = base64Encode(bytes);
+            if (encoded.length <= 700000) answerImageBase64 = encoded;
+          }
         } catch (_) {}
       }
 
@@ -561,27 +575,18 @@ class _QACard extends StatelessWidget {
           .doc(docId)
           .update({
         'answer': answerText,
+        'answerImageUrl': answerImageUrl,
         'answerImageBase64': answerImageBase64,
         'status': 'answered',
         'answeredAt': FieldValue.serverTimestamp(),
       });
 
-      // Queue push notification for the client
+      // Push "answered" to the client who asked (works when app is closed).
       final clientToken = data['clientFcmToken'] as String? ?? '';
-      if (clientToken.isNotEmpty) {
-        final preview = answerText.length > 80
-            ? '${answerText.substring(0, 80)}...'
-            : answerText;
-        await FirebaseFirestore.instance
-            .collection('notification_queue')
-            .add({
-          'type': 'answered',
-          'clientToken': clientToken,
-          'questionId': docId,
-          'answerPreview': preview,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
+      final preview = answerText.length > 80
+          ? '${answerText.substring(0, 80)}...'
+          : answerText;
+      await Backend.notifyAnswer(clientToken, preview);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -859,16 +864,36 @@ class _AskSheetState extends State<_AskSheet> {
   }
 }
 
-// ─── Base64 Image Display ─────────────────────────────────────────────────────
+// ─── Q&A Image Display ────────────────────────────────────────────────────────
+// Shows a hosted image (Hostinger URL) when available, otherwise decodes a
+// base64 image stored in Firestore.
 
-class _Base64Image extends StatelessWidget {
-  final String data;
-  const _Base64Image({required this.data});
+class _QAImage extends StatelessWidget {
+  final String url;
+  final String base64;
+  const _QAImage({required this.url, required this.base64});
 
   @override
   Widget build(BuildContext context) {
+    if (url.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: CachedNetworkImage(
+          imageUrl: url,
+          width: double.infinity,
+          height: 180,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => Container(
+            height: 180,
+            color: Colors.black12,
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+        ),
+      );
+    }
     try {
-      final bytes = base64Decode(data);
+      final bytes = base64Decode(base64);
       return ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: Image.memory(bytes,
