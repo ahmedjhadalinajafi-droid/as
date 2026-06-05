@@ -130,7 +130,7 @@ class _AskPageState extends State<AskPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: _isAdmin ? 3 : 2,
+      length: _isAdmin ? 3 : 1,
       child: IslamicPatternBackground(
         child: Scaffold(
           backgroundColor: Colors.transparent,
@@ -142,8 +142,7 @@ class _AskPageState extends State<AskPage> {
             actions: [
               if (_isAdmin)
                 IconButton(
-                  icon: const Icon(Icons.admin_panel_settings,
-                      color: _gold),
+                  icon: const Icon(Icons.admin_panel_settings, color: _gold),
                   tooltip: 'إلغاء صلاحيات المشرف',
                   onPressed: _removeAdmin,
                 ),
@@ -155,7 +154,7 @@ class _AskPageState extends State<AskPage> {
               unselectedLabelColor: Colors.white70,
               tabs: [
                 const Tab(text: 'أسئلتي'),
-                const Tab(text: 'أسئلة وأجوبة'),
+                if (_isAdmin) const Tab(text: 'الأسئلة والأجوبة'),
                 if (_isAdmin) const Tab(text: 'بانتظار الرد'),
               ],
             ),
@@ -170,7 +169,7 @@ class _AskPageState extends State<AskPage> {
           body: TabBarView(
             children: [
               _MyQuestionsTab(myIds: _myIds),
-              const _PublicQATab(),
+              if (_isAdmin) const _PublicQATab(),
               if (_isAdmin) const _PendingTab(),
             ],
           ),
