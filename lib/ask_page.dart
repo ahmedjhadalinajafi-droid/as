@@ -1,8 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -141,23 +140,26 @@ class _AskPageState extends State<AskPage> {
         clientToken = await FirebaseMessaging.instance.getToken() ?? '';
       } catch (_) {}
 
-      final docRef =
-          FirebaseFirestore.instance.collection('questions').doc();
-
-      // Upload question image if provided
-      String imageUrl = '';
+      // Encode image to base64 (stored directly in Firestore — free plan)
+      String imageBase64 = '';
       final imageFile = result['image'] as XFile?;
       if (imageFile != null) {
-        imageUrl = await _uploadImage(
-            File(imageFile.path), 'questions/${docRef.id}/question.jpg');
+        imageBase64 = await _encodeImage(imageFile);
+        if (imageBase64.isEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('الصورة كبيرة جداً، سيتم إرسال السؤال بدون صورة'),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
       }
 
+      final docRef = FirebaseFirestore.instance.collection('questions').doc();
       await docRef.set({
         'question': questionText,
         'name': result['name'] as String? ?? '',
         'answer': '',
-        'imageUrl': imageUrl,
-        'answerImageUrl': '',
+        'imageBase64': imageBase64,
+        'answerImageBase64': '',
         'status': 'pending',
         'askedAt': FieldValue.serverTimestamp(),
         'clientFcmToken': clientToken,
@@ -200,10 +202,18 @@ class _AskPageState extends State<AskPage> {
     }
   }
 
-  Future<String> _uploadImage(File file, String path) async {
-    final ref = FirebaseStorage.instance.ref(path);
-    await ref.putFile(file);
-    return await ref.getDownloadURL();
+  // Compresses and encodes to base64. Returns empty string if over 700 KB
+  // (Firestore document limit is 1 MB; other fields take some space too).
+  Future<String> _encodeImage(XFile file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final encoded = base64Encode(bytes);
+      if (encoded.length > 700000) return ''; // too large
+      return encoded;
+    } catch (e) {
+      debugPrint('Image encode error: $e');
+      return '';
+    }
   }
 }
 
@@ -267,9 +277,7 @@ class _MyQuestionsTab extends StatelessWidget {
           .where(FieldPath.documentId, whereIn: ids)
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) {
-          return Center(child: Text('خطأ: ${snap.error}'));
-        }
+        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -309,9 +317,7 @@ class _PublicQATab extends StatelessWidget {
           .where('status', isEqualTo: 'answered')
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) {
-          return Center(child: Text('خطأ: ${snap.error}'));
-        }
+        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -351,9 +357,7 @@ class _PendingTab extends StatelessWidget {
           .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) {
-          return Center(child: Text('خطأ: ${snap.error}'));
-        }
+        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -395,22 +399,20 @@ class _QACard extends StatelessWidget {
     final name = data['name'] as String? ?? '';
     final status = data['status'] as String? ?? 'pending';
     final answered = status == 'answered' && answer.isNotEmpty;
-    final imageUrl = data['imageUrl'] as String? ?? '';
-    final answerImageUrl = data['answerImageUrl'] as String? ?? '';
+    final imageBase64 = data['imageBase64'] as String? ?? '';
+    final answerImageBase64 = data['answerImageBase64'] as String? ?? '';
     final ts = data['askedAt'] as Timestamp?;
     final dateStr =
         ts != null ? DateFormat('d MMMM yyyy', 'ar').format(ts.toDate()) : '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Question text
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -436,13 +438,11 @@ class _QACard extends StatelessWidget {
                         color: cs.onSurface.withOpacity(0.5))),
               ),
             ],
-            // Question image
-            if (imageUrl.isNotEmpty) ...[
+            if (imageBase64.isNotEmpty) ...[
               const SizedBox(height: 10),
-              _NetworkImage(url: imageUrl),
+              _Base64Image(data: imageBase64),
             ],
             const SizedBox(height: 10),
-            // Answer section
             if (answered) ...[
               Container(
                 width: double.infinity,
@@ -468,19 +468,18 @@ class _QACard extends StatelessWidget {
                     ]),
                     const SizedBox(height: 6),
                     Text(answer,
-                        style:
-                            const TextStyle(fontSize: 14, height: 1.6)),
-                    if (answerImageUrl.isNotEmpty) ...[
+                        style: const TextStyle(fontSize: 14, height: 1.6)),
+                    if (answerImageBase64.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      _NetworkImage(url: answerImageUrl),
+                      _Base64Image(data: answerImageBase64),
                     ],
                   ],
                 ),
               ),
             ] else ...[
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                     color: _gold.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8)),
@@ -541,13 +540,14 @@ class _QACard extends StatelessWidget {
     if (answerText.isEmpty) return;
 
     try {
-      String answerImageUrl = data['answerImageUrl'] as String? ?? '';
+      String answerImageBase64 = data['answerImageBase64'] as String? ?? '';
       final imageFile = result['image'] as XFile?;
       if (imageFile != null) {
-        final ref =
-            FirebaseStorage.instance.ref('questions/$docId/answer.jpg');
-        await ref.putFile(File(imageFile.path));
-        answerImageUrl = await ref.getDownloadURL();
+        try {
+          final bytes = await imageFile.readAsBytes();
+          final encoded = base64Encode(bytes);
+          if (encoded.length <= 700000) answerImageBase64 = encoded;
+        } catch (_) {}
       }
 
       await FirebaseFirestore.instance
@@ -555,7 +555,7 @@ class _QACard extends StatelessWidget {
           .doc(docId)
           .update({
         'answer': answerText,
-        'answerImageUrl': answerImageUrl,
+        'answerImageBase64': answerImageBase64,
         'status': 'answered',
         'answeredAt': FieldValue.serverTimestamp(),
       });
@@ -639,8 +639,8 @@ class _AnswerDialogState extends State<_AnswerDialog> {
   }
 
   Future<void> _pick() async {
-    final file = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, imageQuality: 75, maxWidth: 1200);
+    final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery, imageQuality: 60, maxWidth: 800);
     if (file != null) setState(() => _image = file);
   }
 
@@ -719,8 +719,8 @@ class _AskSheetState extends State<_AskSheet> {
   }
 
   Future<void> _pick() async {
-    final file = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, imageQuality: 75, maxWidth: 1200);
+    final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery, imageQuality: 60, maxWidth: 800);
     if (file != null) setState(() => _image = file);
   }
 
@@ -746,15 +746,13 @@ class _AskSheetState extends State<_AskSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: cs.onSurface.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                    color: cs.onSurface.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
             const Text('اطرح سؤالك',
-                style:
-                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             TextField(
               controller: _question,
@@ -778,13 +776,12 @@ class _AskSheetState extends State<_AskSheet> {
               ),
             ),
             const SizedBox(height: 10),
-            // Image preview + picker
             if (_image != null) ...[
               Stack(children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Image.file(File(_image!.path),
-                      height: 140,
+                      height: 130,
                       width: double.infinity,
                       fit: BoxFit.cover),
                 ),
@@ -795,8 +792,7 @@ class _AskSheetState extends State<_AskSheet> {
                     onTap: () => setState(() => _image = null),
                     child: Container(
                       decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle),
+                          color: Colors.black54, shape: BoxShape.circle),
                       padding: const EdgeInsets.all(4),
                       child: const Icon(Icons.close,
                           color: Colors.white, size: 18),
@@ -838,28 +834,24 @@ class _AskSheetState extends State<_AskSheet> {
   }
 }
 
-// ─── Shared image widget ──────────────────────────────────────────────────────
+// ─── Base64 Image Display ─────────────────────────────────────────────────────
 
-class _NetworkImage extends StatelessWidget {
-  final String url;
-  const _NetworkImage({required this.url});
+class _Base64Image extends StatelessWidget {
+  final String data;
+  const _Base64Image({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: CachedNetworkImage(
-        imageUrl: url,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        placeholder: (_, __) => Container(
-          height: 140,
-          color: Colors.grey[200],
-          child: const Center(child: CircularProgressIndicator()),
-        ),
-        errorWidget: (_, __, ___) => const SizedBox.shrink(),
-      ),
-    );
+    try {
+      final bytes = base64Decode(data);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.memory(bytes,
+            width: double.infinity, height: 180, fit: BoxFit.cover),
+      );
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
   }
 }
 
