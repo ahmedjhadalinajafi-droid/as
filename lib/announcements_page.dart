@@ -1,7 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -188,7 +189,8 @@ class _AnnouncementCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final title = data['title'] as String? ?? '';
     final body = data['body'] as String? ?? '';
-    final imageUrl = data['imageUrl'] as String? ?? '';
+    final imageBase64 = data['imageBase64'] as String? ?? '';
+    final imageUrl = data['imageUrl'] as String? ?? ''; // legacy
     final linkUrl = data['linkUrl'] as String? ?? '';
     final ts = data['createdAt'] as Timestamp?;
     final dateStr = ts != null
@@ -203,7 +205,17 @@ class _AnnouncementCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (imageUrl.isNotEmpty)
+          if (imageBase64.isNotEmpty)
+            ClipRRect(
+              child: Image.memory(
+                base64Decode(imageBase64),
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            )
+          else if (imageUrl.isNotEmpty)
             CachedNetworkImage(
               imageUrl: imageUrl,
               height: 200,
@@ -342,18 +354,16 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
     setState(() => _uploading = true);
 
     try {
-      String imageUrl = '';
-      if (_image != null && _imageBytes != null) {
-        final ref = FirebaseStorage.instance
-            .ref('announcements/${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await ref.putData(_imageBytes!);
-        imageUrl = await ref.getDownloadURL();
+      String imageBase64 = '';
+      if (_imageBytes != null) {
+        final encoded = base64Encode(_imageBytes!);
+        if (encoded.length <= 700000) imageBase64 = encoded;
       }
 
       await FirebaseFirestore.instance.collection('announcements').add({
         'title': _title.text.trim(),
         'body': _body.text.trim(),
-        'imageUrl': imageUrl,
+        'imageBase64': imageBase64,
         'linkUrl': _link.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       });

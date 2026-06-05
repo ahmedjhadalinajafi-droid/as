@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:audio_session/audio_session.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -153,9 +152,8 @@ class QuranAudioCache extends ChangeNotifier {
       _progress[id] = 0;
       notifyListeners();
 
-      // Resolve Firebase Storage URL, then stream-download with progress
-      final ref = FirebaseStorage.instance.ref('quran_audio/$id.mp3');
-      final url = await ref.getDownloadURL();
+      // Free Quran audio CDN (Mishari Rashid al-Afasy)
+      final url = 'https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/$id.mp3';
       final request = http.Request('GET', Uri.parse(url));
       final response = await request.send();
       final total = response.contentLength ?? 0;
@@ -174,15 +172,8 @@ class QuranAudioCache extends ChangeNotifier {
       await sink.flush();
       await sink.close();
 
-      // Also save the per-ayah timing JSON (if it exists) so highlighting
-      // works offline. Failure here is non-fatal — audio still cached.
-      try {
-        final tRef = FirebaseStorage.instance.ref('quran_audio/$id.json');
-        final bytes = await tRef.getData(2 * 1024 * 1024);
-        if (bytes != null) {
-          await _timingFile(id).writeAsBytes(bytes);
-        }
-      } catch (_) {}
+      // Timing JSON not available on free plan — ayah highlighting uses
+      // letter-count estimation instead (see _ayahStarts fallback).
 
       _cached.add(id);
       _progress.remove(id);
@@ -540,28 +531,9 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
       _timingsCache[id] = local;
       return local;
     }
-    try {
-      final ref = FirebaseStorage.instance.ref('quran_audio/$id.json');
-      final bytes = await ref.getData(2 * 1024 * 1024);
-      if (bytes == null) {
-        _timingsCache[id] = null;
-        return null;
-      }
-      final decoded = json.decode(utf8.decode(bytes));
-      List<double>? starts;
-      if (decoded is List) {
-        starts = decoded.map((e) => (e as num).toDouble()).toList();
-      } else if (decoded is Map && decoded['ayahs'] is List) {
-        starts = (decoded['ayahs'] as List)
-            .map((e) => (e as num).toDouble())
-            .toList();
-      }
-      _timingsCache[id] = starts;
-      return starts;
-    } catch (_) {
-      _timingsCache[id] = null;
-      return null;
-    }
+    // No online timing source on free plan — estimation used instead.
+    _timingsCache[id] = null;
+    return null;
   }
 
   // Start time (seconds) for every ayah: exact timings if uploaded,
@@ -629,8 +601,7 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
     if (localPath != null) return localPath;
     final cached = _urlCache[id];
     if (cached != null) return cached;
-    final ref = FirebaseStorage.instance.ref('quran_audio/$id.mp3');
-    final url = await ref.getDownloadURL();
+    final url = 'https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/$id.mp3';
     _urlCache[id] = url;
     return url;
   }
