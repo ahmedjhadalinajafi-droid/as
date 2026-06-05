@@ -2,22 +2,21 @@
 // أوقات الصلاة — مسجد وحسينية أهل البيت ع
 //
 // ══════════════════════════════════════════════════════════
-//  XCODE SETUP (do this once)
+//  XCODE SETUP (do this once on your Mac)
 // ══════════════════════════════════════════════════════════
-//  1. Open Runner.xcworkspace in Xcode
+//  1. Open ios/Runner.xcworkspace in Xcode
 //  2. File ▸ New ▸ Target ▸ Widget Extension
 //     • Product Name : MasjidWidget
-//     • Include Configuration Intent : NO (uncheck)
-//     • Finish — Xcode asks to activate scheme, tap Activate
-//  3. Main app target (Runner):
-//     Signing & Capabilities ▸ "+" ▸ App Groups
-//     Add: group.com.ahmed.najafi.masjid
-//  4. MasjidWidget target:
-//     Signing & Capabilities ▸ "+" ▸ App Groups
-//     Add: group.com.ahmed.najafi.masjid
-//  5. In MasjidWidget target, delete Xcode-generated Swift file
-//     and add THIS file instead (or just replace its content)
-//  6. Build & run — long-press home screen to add widget
+//     • Include Live Activity : NO
+//     • Include Configuration App Intent : NO
+//     • Finish ▸ Activate scheme
+//  3. Select the Runner target ▸ Signing & Capabilities ▸ "+ Capability"
+//     ▸ App Groups ▸ add:  group.com.ahmed.najafi.masjid
+//  4. Select the MasjidWidget target ▸ Signing & Capabilities ▸ "+ Capability"
+//     ▸ App Groups ▸ add the SAME group:  group.com.ahmed.najafi.masjid
+//  5. In the MasjidWidget target, replace the auto-generated Swift file's
+//     contents with THIS file's contents.
+//  6. Build & run — long-press the home screen ▸ + ▸ search "أهل البيت".
 // ══════════════════════════════════════════════════════════
 
 import WidgetKit
@@ -44,36 +43,21 @@ struct PrayerEntry: TimelineEntry {
     let date: Date
     let fajr: String
     let dhuhr: String
-    let asr: String
     let maghrib: String
-    let isha: String
     let nextPrayer: String
     let nextPrayerTime: String
 
     static let sample = PrayerEntry(
         date: Date(),
-        fajr: "04:15", dhuhr: "12:00",
-        asr:  "15:30", maghrib: "18:15", isha: "19:45",
+        fajr: "04:15", dhuhr: "12:00", maghrib: "18:15",
         nextPrayer: "المغرب", nextPrayerTime: "18:15"
     )
 
     var prayers: [Prayer] {[
         Prayer(id: "fajr",    arabic: "الفجر",  time: fajr),
         Prayer(id: "dhuhr",   arabic: "الظهر",  time: dhuhr),
-        Prayer(id: "asr",     arabic: "العصر",  time: asr),
         Prayer(id: "maghrib", arabic: "المغرب", time: maghrib),
-        Prayer(id: "isha",    arabic: "العشاء", time: isha),
     ]}
-
-    // 24-hour "HH:mm" → 12-hour "h:mm a"
-    func display(_ t: String) -> String {
-        guard t != "--:--", !t.isEmpty else { return "--:--" }
-        let f24 = DateFormatter(); f24.dateFormat = "HH:mm"
-        let f12 = DateFormatter(); f12.dateFormat = "h:mm a"
-        f12.locale = Locale(identifier: "en_US")
-        guard let d = f24.date(from: t) else { return t }
-        return f12.string(from: d)
-    }
 }
 
 // MARK: - Provider
@@ -97,11 +81,9 @@ struct PrayerProvider: TimelineProvider {
         let ud = UserDefaults(suiteName: kGroupId)
         return PrayerEntry(
             date: Date(),
-            fajr:    ud?.string(forKey: "fajr")             ?? "--:--",
-            dhuhr:   ud?.string(forKey: "dhuhr")            ?? "--:--",
-            asr:     ud?.string(forKey: "asr")               ?? "--:--",
+            fajr:    ud?.string(forKey: "fajr")              ?? "--:--",
+            dhuhr:   ud?.string(forKey: "dhuhr")             ?? "--:--",
             maghrib: ud?.string(forKey: "maghrib")           ?? "--:--",
-            isha:    ud?.string(forKey: "isha")              ?? "--:--",
             nextPrayer:     ud?.string(forKey: "next_prayer")      ?? "الفجر",
             nextPrayerTime: ud?.string(forKey: "next_prayer_time") ?? "--:--"
         )
@@ -126,230 +108,99 @@ struct PrayerCell: View {
     var body: some View {
         VStack(spacing: small ? 2 : 4) {
             Text(prayer.arabic)
-                .font(.system(size: small ? 9 : 11, weight: isNext ? .bold : .regular))
+                .font(.system(size: small ? 10 : 12, weight: isNext ? .bold : .regular))
                 .foregroundColor(isNext ? kGold : .white.opacity(0.6))
-
-            Text(entry.display(prayer.time))
-                .font(.system(size: small ? 11 : 13, weight: .bold, design: .monospaced))
+            Text(prayer.time)
+                .font(.system(size: small ? 12 : 14, weight: .bold, design: .monospaced))
                 .foregroundColor(isNext ? kGold : .white)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, small ? 5 : 7)
+        .padding(.vertical, small ? 6 : 8)
         .background(isNext ? kGold.opacity(0.15) : Color.white.opacity(0.07))
-        .cornerRadius(small ? 6 : 9)
+        .cornerRadius(small ? 7 : 10)
         .overlay(
-            RoundedRectangle(cornerRadius: small ? 6 : 9)
+            RoundedRectangle(cornerRadius: small ? 7 : 10)
                 .stroke(isNext ? kGold.opacity(0.55) : Color.clear, lineWidth: 1)
         )
     }
 }
 
-// MARK: - Small widget  (next prayer only)
+// MARK: - Small widget (next prayer only)
 
 struct SmallView: View {
     let e: PrayerEntry
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [kNavy, kNavyDark],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            .ignoresSafeArea()
+        VStack(spacing: 5) {
+            Text("مسجد أهل البيت ع")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.white.opacity(0.65))
+                .multilineTextAlignment(.center)
 
-            VStack(spacing: 5) {
-                // Mosque logo + name
-                Image("logo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
+            GoldDivider().padding(.vertical, 2)
 
-                Text("مسجد أهل البيت ع")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white.opacity(0.65))
-                    .multilineTextAlignment(.center)
+            Text("الصلاة القادمة")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.45))
 
-                GoldDivider().padding(.vertical, 2)
+            Text(e.nextPrayer.isEmpty ? "الفجر" : e.nextPrayer)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(kGold)
 
-                Text("الصلاة القادمة")
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.45))
+            Text(e.nextPrayerTime)
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.white.opacity(0.12))
+                .cornerRadius(8)
+        }
+        .padding(12)
+    }
+}
 
-                Text(e.nextPrayer.isEmpty ? "الفجر" : e.nextPrayer)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(kGold)
+// MARK: - Medium / Large widget (next prayer + 3-prayer grid)
 
-                Text(e.display(e.nextPrayerTime))
-                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+struct WideView: View {
+    let e: PrayerEntry
+    let large: Bool
+
+    var body: some View {
+        VStack(spacing: large ? 12 : 8) {
+            HStack {
+                Text("مسجد وحسينية أهل البيت ع")
+                    .font(.system(size: large ? 14 : 12, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.12))
+                Spacer()
+                if !e.nextPrayer.isEmpty {
+                    HStack(spacing: 3) {
+                        Circle().fill(kGold).frame(width: 5, height: 5)
+                        Text("\(e.nextPrayer)  \(e.nextPrayerTime)")
+                            .font(.system(size: large ? 11 : 9, weight: .semibold))
+                            .foregroundColor(kGold)
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(kGold.opacity(0.12))
                     .cornerRadius(8)
+                }
             }
-            .padding(12)
+
+            GoldDivider()
+
+            HStack(spacing: large ? 10 : 6) {
+                ForEach(e.prayers) { p in
+                    PrayerCell(prayer: p, entry: e, small: !large)
+                }
+            }
+
+            if large { Spacer(minLength: 0) }
         }
+        .padding(large ? 16 : 12)
     }
 }
 
-// MARK: - Medium widget  (next prayer + 5-prayer grid)
-
-struct MediumView: View {
-    let e: PrayerEntry
-
-    var body: some View {
-        ZStack {
-            LinearGradient(colors: [kNavy, Color(red: 0.165, green: 0.357, blue: 0.659)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            .ignoresSafeArea()
-
-            VStack(spacing: 7) {
-                // Header row
-                HStack {
-                    HStack(spacing: 5) {
-                        Image("logo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 18, height: 18)
-                        Text("مسجد أهل البيت ع")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    Spacer()
-                    // Next prayer pill
-                    if !e.nextPrayer.isEmpty {
-                        HStack(spacing: 3) {
-                            Circle().fill(kGold).frame(width: 5, height: 5)
-                            Text("\(e.nextPrayer)  \(e.display(e.nextPrayerTime))")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(kGold)
-                        }
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(kGold.opacity(0.12))
-                        .cornerRadius(8)
-                    }
-                }
-
-                GoldDivider()
-
-                // Row 1: Fajr, Dhuhr, Asr
-                HStack(spacing: 6) {
-                    ForEach(e.prayers.prefix(3)) { p in
-                        PrayerCell(prayer: p, entry: e, small: true)
-                    }
-                }
-
-                // Row 2: Maghrib, Isha (+ invisible filler)
-                HStack(spacing: 6) {
-                    ForEach(e.prayers.suffix(2)) { p in
-                        PrayerCell(prayer: p, entry: e, small: true)
-                    }
-                    // Filler to keep same width as row 1
-                    Color.clear.frame(maxWidth: .infinity)
-                }
-            }
-            .padding(12)
-        }
-    }
-}
-
-// MARK: - Large widget  (full branded + big next prayer + grid)
-
-struct LargeView: View {
-    let e: PrayerEntry
-
-    var body: some View {
-        ZStack {
-            LinearGradient(colors: [kNavy, kNavyDark, kNavy],
-                           startPoint: .top, endPoint: .bottom)
-            .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // ── Header ──────────────────────────────────
-                VStack(spacing: 4) {
-                    Image("logo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 48, height: 48)
-                        .padding(.top, 4)
-
-                    Text("مسجد وحسينية أهل البيت ع")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-
-                    Text("بغداد — المنصور")
-                        .font(.system(size: 10))
-                        .foregroundColor(kGold.opacity(0.8))
-                }
-                .padding(.bottom, 10)
-
-                GoldDivider().padding(.horizontal, 20)
-
-                // ── Next Prayer ─────────────────────────────
-                VStack(spacing: 5) {
-                    Text("الصلاة القادمة")
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.5))
-                        .padding(.top, 10)
-
-                    Text(e.nextPrayer.isEmpty ? "الفجر" : e.nextPrayer)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(kGold)
-
-                    Text(e.display(e.nextPrayerTime))
-                        .font(.system(size: 22, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 7)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(kGold.opacity(0.15))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(kGold.opacity(0.5), lineWidth: 1)
-                                )
-                        )
-                }
-
-                // ── All Prayers ─────────────────────────────
-                VStack(spacing: 8) {
-                    HStack {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.12))
-                            .frame(height: 1)
-                        Text("أوقات الصلاة")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.4))
-                            .padding(.horizontal, 8)
-                        Rectangle()
-                            .fill(Color.white.opacity(0.12))
-                            .frame(height: 1)
-                    }
-                    .padding(.top, 12)
-
-                    // Row 1: 3 prayers
-                    HStack(spacing: 8) {
-                        ForEach(e.prayers.prefix(3)) { p in
-                            PrayerCell(prayer: p, entry: e, small: false)
-                        }
-                    }
-                    // Row 2: 2 prayers
-                    HStack(spacing: 8) {
-                        ForEach(e.prayers.suffix(2)) { p in
-                            PrayerCell(prayer: p, entry: e, small: false)
-                        }
-                        Color.clear.frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.horizontal, 2)
-
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-        }
-    }
-}
-
-// MARK: - Entry View (dispatches by family)
+// MARK: - Entry View
 
 struct MasjidWidgetEntryView: View {
     var entry: PrayerEntry
@@ -357,9 +208,9 @@ struct MasjidWidgetEntryView: View {
 
     var body: some View {
         switch family {
-        case .systemSmall:  SmallView(e: entry)
-        case .systemLarge:  LargeView(e: entry)
-        default:            MediumView(e: entry)
+        case .systemSmall: SmallView(e: entry)
+        case .systemLarge: WideView(e: entry, large: true)
+        default:           WideView(e: entry, large: false)
         }
     }
 }
@@ -373,9 +224,18 @@ struct MasjidWidget: Widget {
         StaticConfiguration(kind: kind, provider: PrayerProvider()) { entry in
             if #available(iOS 17.0, *) {
                 MasjidWidgetEntryView(entry: entry)
-                    .containerBackground(kNavy, for: .widget)
+                    .containerBackground(
+                        LinearGradient(colors: [kNavy, kNavyDark],
+                                       startPoint: .topLeading,
+                                       endPoint: .bottomTrailing),
+                        for: .widget)
             } else {
-                MasjidWidgetEntryView(entry: entry)
+                ZStack {
+                    LinearGradient(colors: [kNavy, kNavyDark],
+                                   startPoint: .topLeading,
+                                   endPoint: .bottomTrailing)
+                    MasjidWidgetEntryView(entry: entry)
+                }
             }
         }
         .configurationDisplayName("أوقات الصلاة")
@@ -396,18 +256,6 @@ struct MasjidWidgetBundle: WidgetBundle {
 // MARK: - Preview
 
 #Preview("Medium", as: .systemMedium) {
-    MasjidWidget()
-} timeline: {
-    PrayerEntry.sample
-}
-
-#Preview("Small", as: .systemSmall) {
-    MasjidWidget()
-} timeline: {
-    PrayerEntry.sample
-}
-
-#Preview("Large", as: .systemLarge) {
     MasjidWidget()
 } timeline: {
     PrayerEntry.sample

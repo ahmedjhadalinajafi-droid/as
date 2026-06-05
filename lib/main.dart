@@ -26,6 +26,7 @@ import 'islamic_background.dart';
 import 'mafatih_page.dart';
 import 'notification_service.dart';
 import 'prayer_times_page.dart';
+import 'prayer_widget_service.dart';
 import 'qibla_page.dart';
 import 'quran_page.dart';
 import 'social_media_page.dart';
@@ -676,6 +677,11 @@ class _HomePageState extends State<HomePage> {
           _nextPrayerTime = t;
         });
         _startCountdown(h, m);
+        PrayerWidgetService.update(
+          times: times,
+          nextPrayer: _nextPrayer,
+          nextPrayerTime: _nextPrayerTime,
+        );
         return;
       }
     }
@@ -684,6 +690,11 @@ class _HomePageState extends State<HomePage> {
       _nextPrayer = 'الفجر';
       _nextPrayerTime = times['fajr'] ?? '';
     });
+    PrayerWidgetService.update(
+      times: times,
+      nextPrayer: _nextPrayer,
+      nextPrayerTime: _nextPrayerTime,
+    );
     final parts = (times['fajr'] ?? '').split(':');
     if (parts.length >= 2) {
       _startCountdown(

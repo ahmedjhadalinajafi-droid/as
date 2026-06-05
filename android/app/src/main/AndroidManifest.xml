@@ -70,6 +70,19 @@
             </intent-filter>
         </receiver>
 
+        <!-- Prayer times home-screen widget -->
+        <receiver
+            android:name=".MasjidWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/masjid_widget_info" />
+        </receiver>
+
         <!-- Flutter standard setup -->
         <meta-data
             android:name="flutterEmbedding"
