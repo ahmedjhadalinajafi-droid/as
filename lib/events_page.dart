@@ -1,11 +1,20 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'islamic_background.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
+
+// Same secret-key admin flag used by the Q&A page. A device becomes admin by
+// typing the secret string as a question; that toggles this SharedPreferences
+// flag, which also unlocks adding/deleting events here.
+const _deviceAdminKey = 'ask_device_admin';
 
 const _categories = [
   ('فعالية', Icons.event, Color(0xFF9C27B0)),
@@ -27,11 +36,19 @@ class EventsPage extends StatefulWidget {
 class _EventsPageState extends State<EventsPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    _loadAdmin();
+  }
+
+  Future<void> _loadAdmin() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _isAdmin = prefs.getBool(_deviceAdminKey) ?? false);
   }
 
   @override
@@ -40,31 +57,48 @@ class _EventsPageState extends State<EventsPage>
     super.dispose();
   }
 
+  Future<void> _addEvent() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const _AddEventPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return IslamicPatternBackground(
-      child: Scaffold( backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('الفعاليات والأحداث'),
-        bottom: TabBar(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('الفعاليات والأحداث'),
+          bottom: TabBar(
+            controller: _tabs,
+            indicatorColor: _gold,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white60,
+            tabs: const [
+              Tab(text: 'القادمة'),
+              Tab(text: 'السابقة'),
+            ],
+          ),
+        ),
+        floatingActionButton: _isAdmin
+            ? FloatingActionButton.extended(
+                backgroundColor: _navy,
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.add),
+                label: const Text('فعالية جديدة'),
+                onPressed: _addEvent,
+              )
+            : null,
+        body: TabBarView(
           controller: _tabs,
-          indicatorColor: _gold,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          tabs: const [
-            Tab(text: 'القادمة'),
-            Tab(text: 'السابقة'),
+          children: [
+            _EventList(upcoming: true, isAdmin: _isAdmin),
+            _EventList(upcoming: false, isAdmin: _isAdmin),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          _EventList(upcoming: true),
-          _EventList(upcoming: false),
-        ],
-      ),
-    ),
     );
   }
 }
@@ -73,7 +107,8 @@ class _EventsPageState extends State<EventsPage>
 
 class _EventList extends StatelessWidget {
   final bool upcoming;
-  const _EventList({required this.upcoming});
+  final bool isAdmin;
+  const _EventList({required this.upcoming, required this.isAdmin});
 
   Stream<QuerySnapshot>? _buildStream() {
     try {
@@ -141,7 +176,12 @@ class _EventList extends StatelessWidget {
           itemCount: sorted.length,
           itemBuilder: (ctx, i) {
             final data = sorted[i].data() as Map<String, dynamic>;
-            return _EventCard(data: data, isPast: !upcoming);
+            return _EventCard(
+              data: data,
+              docId: sorted[i].id,
+              isPast: !upcoming,
+              isAdmin: isAdmin,
+            );
           },
         );
       },
@@ -153,9 +193,37 @@ class _EventList extends StatelessWidget {
 
 class _EventCard extends StatelessWidget {
   final Map<String, dynamic> data;
+  final String docId;
   final bool isPast;
+  final bool isAdmin;
 
-  const _EventCard({required this.data, required this.isPast});
+  const _EventCard({
+    required this.data,
+    required this.docId,
+    required this.isPast,
+    required this.isAdmin,
+  });
+
+  Future<void> _delete(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الفعالية'),
+        content: const Text('هل تريد حذف هذه الفعالية نهائياً؟'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child:
+                  const Text('حذف', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await FirebaseFirestore.instance.collection('events').doc(docId).delete();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +233,8 @@ class _EventCard extends StatelessWidget {
     final title       = data['title']       as String? ?? '';
     final description = data['description'] as String? ?? '';
     final location    = data['location']    as String? ?? '';
-    final imageUrl    = data['imageUrl']    as String? ?? '';
+    final imageBase64 = data['imageBase64'] as String? ?? '';
+    final imageUrl    = data['imageUrl']    as String? ?? ''; // legacy
     final category    = data['category']    as String? ?? 'فعالية';
     final ts          = data['date']        as Timestamp?;
     final date        = ts?.toDate();
@@ -208,35 +277,33 @@ class _EventCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image
-            if (imageUrl.isNotEmpty)
-              Stack(
-                children: [
-                  CachedNetworkImage(
-                    imageUrl: imageUrl,
+            // Image — base64 (stored in Firestore) preferred, legacy URL fallback
+            if (imageBase64.isNotEmpty)
+              _EventImage(
+                child: Image.memory(
+                  base64Decode(imageBase64),
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+                isPast: isPast,
+              )
+            else if (imageUrl.isNotEmpty)
+              _EventImage(
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
                     height: 180,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(
-                      height: 180,
-                      color: _navy.withOpacity(0.08),
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                    errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                    color: _navy.withOpacity(0.08),
+                    child: const Center(child: CircularProgressIndicator()),
                   ),
-                  if (isPast)
-                    Container(
-                      height: 180,
-                      color: Colors.black.withOpacity(0.35),
-                      child: const Center(
-                        child: Text('انتهت',
-                            style: TextStyle(
-                                color: Colors.white60,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                ],
+                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                ),
+                isPast: isPast,
               ),
 
             Padding(
@@ -297,58 +364,76 @@ class _EventCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Category chip + boosted badge
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
+                        // Category chip + boosted badge + admin delete
+                        Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: catData.$3.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                            Expanded(
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
                                 children: [
-                                  Icon(catData.$2, size: 12, color: catData.$3),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    category,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: catData.$3,
-                                      fontWeight: FontWeight.bold,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: catData.$3.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(catData.$2,
+                                            size: 12, color: catData.$3),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          category,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: catData.$3,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
+                                  if (boosted)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [_gold, Color(0xFFE0C66A)],
+                                        ),
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.star,
+                                              size: 12, color: Colors.white),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'مميز',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
-                            if (boosted)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [_gold, Color(0xFFE0C66A)],
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.star, size: 12, color: Colors.white),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'مميز',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
+                            if (isAdmin)
+                              GestureDetector(
+                                onTap: () => _delete(context),
+                                child: const Padding(
+                                  padding: EdgeInsets.only(right: 4, left: 4),
+                                  child: Icon(Icons.delete_outline,
+                                      color: Colors.red, size: 20),
                                 ),
                               ),
                           ],
@@ -427,6 +512,337 @@ class _EventCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// Wraps an event image and overlays an "انتهت" (ended) badge for past events.
+class _EventImage extends StatelessWidget {
+  final Widget child;
+  final bool isPast;
+  const _EventImage({required this.child, required this.isPast});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        child,
+        if (isPast)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.35),
+              child: const Center(
+                child: Text('انتهت',
+                    style: TextStyle(
+                        color: Colors.white60,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─── Add Event (admin) ────────────────────────────────────────────────────────
+
+class _AddEventPage extends StatefulWidget {
+  const _AddEventPage();
+
+  @override
+  State<_AddEventPage> createState() => _AddEventPageState();
+}
+
+class _AddEventPageState extends State<_AddEventPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _title = TextEditingController();
+  final _description = TextEditingController();
+  final _location = TextEditingController();
+  String _category = _categories.first.$1;
+  DateTime? _date;
+  bool _boosted = false;
+  Uint8List? _imageBytes;
+  bool _uploading = false;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _description.dispose();
+    _location.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final picked = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1000);
+    if (picked != null && mounted) {
+      final bytes = await picked.readAsBytes();
+      setState(() => _imageBytes = bytes);
+    }
+  }
+
+  Future<void> _pickDateTime() async {
+    final now = DateTime.now();
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _date ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 3),
+    );
+    if (d == null || !mounted) return;
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_date ?? now),
+    );
+    if (!mounted) return;
+    setState(() {
+      _date = DateTime(d.year, d.month, d.day, t?.hour ?? 0, t?.minute ?? 0);
+    });
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_date == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('يرجى اختيار تاريخ ووقت الفعالية'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    setState(() => _uploading = true);
+
+    try {
+      String imageBase64 = '';
+      if (_imageBytes != null) {
+        final encoded = base64Encode(_imageBytes!);
+        if (encoded.length <= 700000) {
+          imageBase64 = encoded;
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('الصورة كبيرة جداً، سيتم النشر بدون صورة'),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+      }
+
+      await FirebaseFirestore.instance.collection('events').add({
+        'title': _title.text.trim(),
+        'description': _description.text.trim(),
+        'location': _location.text.trim(),
+        'category': _category,
+        'imageBase64': imageBase64,
+        'boosted': _boosted,
+        'date': Timestamp.fromDate(_date!),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('تم نشر الفعالية ✅'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('خطأ: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return IslamicPatternBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('فعالية جديدة'),
+          actions: [
+            TextButton(
+              onPressed: _uploading ? null : _submit,
+              child: _uploading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Text('نشر',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Image picker
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    height: 180,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: cs.primary.withOpacity(0.3)),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _imageBytes != null
+                        ? Image.memory(_imageBytes!, fit: BoxFit.cover)
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_photo_alternate_outlined,
+                                  size: 48,
+                                  color: cs.primary.withOpacity(0.5)),
+                              const SizedBox(height: 8),
+                              Text('اضغط لإضافة صورة (اختياري)',
+                                  style: TextStyle(
+                                      color: cs.onSurface.withOpacity(0.5))),
+                            ],
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title
+                TextFormField(
+                  controller: _title,
+                  decoration: InputDecoration(
+                    labelText: 'عنوان الفعالية',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'يرجى إدخال العنوان'
+                      : null,
+                ),
+                const SizedBox(height: 12),
+
+                // Category
+                DropdownButtonFormField<String>(
+                  value: _category,
+                  decoration: InputDecoration(
+                    labelText: 'النوع',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  items: _categories
+                      .map((c) => DropdownMenuItem(
+                            value: c.$1,
+                            child: Row(
+                              children: [
+                                Icon(c.$2, size: 18, color: c.$3),
+                                const SizedBox(width: 8),
+                                Text(c.$1),
+                              ],
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => _category = v ?? _categories.first.$1),
+                ),
+                const SizedBox(height: 12),
+
+                // Date & time
+                InkWell(
+                  onTap: _pickDateTime,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'التاريخ والوقت',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.event, color: _navy),
+                    ),
+                    child: Text(
+                      _date == null
+                          ? 'اضغط لاختيار التاريخ والوقت'
+                          : DateFormat('EEEE d MMMM yyyy — hh:mm a', 'ar')
+                              .format(_date!),
+                      style: TextStyle(
+                        color: _date == null
+                            ? cs.onSurface.withOpacity(0.5)
+                            : cs.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Location
+                TextFormField(
+                  controller: _location,
+                  decoration: InputDecoration(
+                    labelText: 'المكان (اختياري)',
+                    prefixIcon: const Icon(Icons.location_on_outlined,
+                        color: _gold),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Description
+                TextFormField(
+                  controller: _description,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    labelText: 'الوصف (اختياري)',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Boosted toggle
+                SwitchListTile(
+                  value: _boosted,
+                  onChanged: (v) => setState(() => _boosted = v),
+                  activeColor: _gold,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('تمييز الفعالية (تظهر في الأعلى)'),
+                  secondary: const Icon(Icons.star, color: _gold),
+                ),
+                const SizedBox(height: 16),
+
+                ElevatedButton.icon(
+                  onPressed: _uploading ? null : _submit,
+                  icon: _uploading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child:
+                              CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.send),
+                  label: Text(_uploading ? 'جارٍ النشر...' : 'نشر الفعالية'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _navy,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
