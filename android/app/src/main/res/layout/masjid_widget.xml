@@ -47,13 +47,14 @@
         android:textSize="15sp"
         android:textStyle="bold" />
 
-    <!-- Divider -->
-    <View
+    <!-- Divider (LinearLayout — RemoteViews does not support bare <View>) -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
-        android:background="#33C9A843" />
+        android:background="#33C9A843"
+        android:orientation="horizontal" />
 
     <!-- Today's prayer times row -->
     <LinearLayout
