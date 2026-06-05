@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'islamic_background.dart';
 
 const _deviceAdminKey = 'ask_device_admin';
+// Secret phrase typed as a question to activate admin on this device.
+// To remove admin: type the same phrase again.
+const _adminSecret = 'MasjidAhlAlBait-Admin-Baghdad-Mansour-2026';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -86,6 +89,25 @@ class _AskPageState extends State<AskPage> {
       builder: (_) => const _AskSheet(),
     );
     if (result == null) return;
+
+    // Secret admin activation — not sent to Firestore
+    if (result['question']?.trim() == _adminSecret) {
+      final prefs = await SharedPreferences.getInstance();
+      final current = prefs.getBool(_deviceAdminKey) ?? false;
+      await prefs.setBool(_deviceAdminKey, !current);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(!current
+                ? 'تم تفعيل صلاحيات المشرف على هذا الجهاز ✅'
+                : 'تم إلغاء صلاحيات المشرف من هذا الجهاز'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
     final doc = await FirebaseFirestore.instance.collection('questions').add({
       'question': result['question'],
