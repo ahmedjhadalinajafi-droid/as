@@ -38,7 +38,7 @@ class _AskPageState extends State<AskPage> {
   Future<void> _loadMyIds() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
-      setState(() => _myIds = (prefs.getStringList('my_questions') ?? {}).toSet());
+      setState(() => _myIds = (prefs.getStringList('my_questions') ?? []).toSet());
     }
   }
 
