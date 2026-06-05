@@ -1,17 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'islamic_background.dart';
 
-// Admin email — only this account can answer questions
-const _adminEmail = 'ahmedjhadalinajafi@gmail.com';
-
-bool get _isAdmin =>
-    FirebaseAuth.instance.currentUser?.email == _adminEmail;
+// ─── Admin PIN (change this to whatever you want) ─────────────────────────────
+const _adminPin = '786786';
+const _deviceAdminKey = 'ask_device_admin';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -26,20 +21,110 @@ class AskPage extends StatefulWidget {
 }
 
 class _AskPageState extends State<AskPage> {
-  // The local device's question IDs (so the user can see their own answers).
   Set<String> _myIds = {};
+  bool _isAdmin = false;
+  int _titleTaps = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadMyIds();
+    _load();
   }
 
-  Future<void> _loadMyIds() async {
+  Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
-      setState(() => _myIds = (prefs.getStringList('my_questions') ?? []).toSet());
+      setState(() {
+        _myIds = (prefs.getStringList('my_questions') ?? []).toSet();
+        _isAdmin = prefs.getBool(_deviceAdminKey) ?? false;
+      });
     }
+  }
+
+  // Tap the title 5 times to trigger admin PIN dialog
+  void _onTitleTap() {
+    _titleTaps++;
+    if (_titleTaps >= 5) {
+      _titleTaps = 0;
+      _showPinDialog();
+    }
+  }
+
+  Future<void> _showPinDialog() async {
+    final controller = TextEditingController();
+    final entered = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('دخول المشرف'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'رمز الدخول',
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, controller.text),
+              child: const Text('دخول')),
+        ],
+      ),
+    );
+
+    if (entered == null) return;
+
+    if (entered == _adminPin) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_deviceAdminKey, true);
+      if (mounted) {
+        setState(() => _isAdmin = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تفعيل صلاحيات المشرف على هذا الجهاز ✅'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('رمز غير صحيح'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeAdmin() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إلغاء صلاحيات المشرف'),
+        content: const Text('هل تريد إلغاء صلاحيات المشرف من هذا الجهاز؟'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('نعم', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_deviceAdminKey, false);
+    if (mounted) setState(() => _isAdmin = false);
   }
 
   @override
@@ -50,8 +135,19 @@ class _AskPageState extends State<AskPage> {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: const Text('الأسئلة والأجوبة'),
-            actions: [_AdminLoginButton(onChanged: () => setState(() {}))],
+            title: GestureDetector(
+              onTap: _onTitleTap,
+              child: const Text('الأسئلة والأجوبة'),
+            ),
+            actions: [
+              if (_isAdmin)
+                IconButton(
+                  icon: const Icon(Icons.admin_panel_settings,
+                      color: _gold),
+                  tooltip: 'إلغاء صلاحيات المشرف',
+                  onPressed: _removeAdmin,
+                ),
+            ],
             bottom: TabBar(
               isScrollable: false,
               indicatorColor: _gold,
@@ -100,12 +196,11 @@ class _AskPageState extends State<AskPage> {
       'askedAt': FieldValue.serverTimestamp(),
     });
 
-    // Remember this question on the device so the user sees the answer later.
     final prefs = await SharedPreferences.getInstance();
     final ids = prefs.getStringList('my_questions') ?? [];
     ids.add(doc.id);
     await prefs.setStringList('my_questions', ids);
-    await _loadMyIds();
+    await _load();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -132,7 +227,6 @@ class _MyQuestionsTab extends StatelessWidget {
         text: 'لم ترسل أي سؤال بعد.\nاضغط "اطرح سؤالاً" للبدء.',
       );
     }
-    // Firestore whereIn supports up to 30 IDs; show the latest 30.
     final ids = myIds.toList().reversed.take(30).toList();
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -140,9 +234,7 @@ class _MyQuestionsTab extends StatelessWidget {
           .where(FieldPath.documentId, whereIn: ids)
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) {
-          return Center(child: Text('خطأ: ${snap.error}'));
-        }
+        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -161,7 +253,7 @@ class _MyQuestionsTab extends StatelessWidget {
           itemBuilder: (ctx, i) => _QACard(
             data: docs[i].data() as Map<String, dynamic>,
             docId: docs[i].id,
-            showAdminAnswer: false,
+            showAdminActions: false,
           ),
         );
       },
@@ -169,7 +261,7 @@ class _MyQuestionsTab extends StatelessWidget {
   }
 }
 
-// ─── Public Q&A Tab (answered, published) ─────────────────────────────────────
+// ─── Public Q&A Tab ───────────────────────────────────────────────────────────
 
 class _PublicQATab extends StatelessWidget {
   const _PublicQATab();
@@ -182,9 +274,7 @@ class _PublicQATab extends StatelessWidget {
           .where('status', isEqualTo: 'answered')
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) {
-          return Center(child: Text('خطأ: ${snap.error}'));
-        }
+        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -203,7 +293,7 @@ class _PublicQATab extends StatelessWidget {
           itemBuilder: (ctx, i) => _QACard(
             data: docs[i].data() as Map<String, dynamic>,
             docId: docs[i].id,
-            showAdminAnswer: _isAdmin,
+            showAdminActions: false,
           ),
         );
       },
@@ -224,9 +314,7 @@ class _PendingTab extends StatelessWidget {
           .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (ctx, snap) {
-        if (snap.hasError) {
-          return Center(child: Text('خطأ: ${snap.error}'));
-        }
+        if (snap.hasError) return Center(child: Text('خطأ: ${snap.error}'));
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
           return const _EmptyState(
@@ -240,7 +328,7 @@ class _PendingTab extends StatelessWidget {
           itemBuilder: (ctx, i) => _QACard(
             data: docs[i].data() as Map<String, dynamic>,
             docId: docs[i].id,
-            showAdminAnswer: true,
+            showAdminActions: true,
           ),
         );
       },
@@ -253,11 +341,11 @@ class _PendingTab extends StatelessWidget {
 class _QACard extends StatelessWidget {
   final Map<String, dynamic> data;
   final String docId;
-  final bool showAdminAnswer; // show "answer" / "edit" button for admin
+  final bool showAdminActions;
   const _QACard({
     required this.data,
     required this.docId,
-    required this.showAdminAnswer,
+    required this.showAdminActions,
   });
 
   @override
@@ -270,8 +358,9 @@ class _QACard extends StatelessWidget {
     final status = data['status'] as String? ?? 'pending';
     final answered = status == 'answered' && answer.isNotEmpty;
     final ts = data['askedAt'] as Timestamp?;
-    final dateStr =
-        ts != null ? DateFormat('d MMMM yyyy', 'ar').format(ts.toDate()) : '';
+    final dateStr = ts != null
+        ? DateFormat('d MMMM yyyy', 'ar').format(ts.toDate())
+        : '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -285,8 +374,7 @@ class _QACard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.help_outline_rounded,
-                    color: _navy, size: 20),
+                const Icon(Icons.help_outline_rounded, color: _navy, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -307,12 +395,13 @@ class _QACard extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 28),
                 child: Text('— $name',
                     style: TextStyle(
-                        fontSize: 12, color: cs.onSurface.withOpacity(0.5))),
+                        fontSize: 12,
+                        color: cs.onSurface.withOpacity(0.5))),
               ),
             ],
             const SizedBox(height: 10),
 
-            // Answer or pending state
+            // Answer or pending badge
             if (answered)
               Container(
                 width: double.infinity,
@@ -340,14 +429,15 @@ class _QACard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(answer,
-                        style: const TextStyle(fontSize: 14, height: 1.6)),
+                        style:
+                            const TextStyle(fontSize: 14, height: 1.6)),
                   ],
                 ),
               )
             else
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: _gold.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -366,18 +456,18 @@ class _QACard extends StatelessWidget {
                 ),
               ),
 
-            // Footer: date + admin buttons
             const SizedBox(height: 8),
             Row(
               children: [
                 if (dateStr.isNotEmpty)
                   Text(dateStr,
                       style: TextStyle(
-                          fontSize: 11, color: cs.onSurface.withOpacity(0.45))),
+                          fontSize: 11,
+                          color: cs.onSurface.withOpacity(0.45))),
                 const Spacer(),
-                if (showAdminAnswer) ...[
+                if (showAdminActions) ...[
                   TextButton.icon(
-                    onPressed: () => _answer(context),
+                    onPressed: () => _answer(context, answered),
                     icon: Icon(answered ? Icons.edit : Icons.reply,
                         size: 18, color: _navy),
                     label: Text(answered ? 'تعديل' : 'رد',
@@ -397,13 +487,13 @@ class _QACard extends StatelessWidget {
     );
   }
 
-  Future<void> _answer(BuildContext context) async {
+  Future<void> _answer(BuildContext context, bool editing) async {
     final controller =
         TextEditingController(text: data['answer'] as String? ?? '');
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('كتابة الجواب'),
+        title: Text(editing ? 'تعديل الجواب' : 'كتابة الجواب'),
         content: TextField(
           controller: controller,
           maxLines: 6,
@@ -419,14 +509,16 @@ class _QACard extends StatelessWidget {
               onPressed: () => Navigator.pop(ctx),
               child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('نشر الجواب'),
-          ),
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('نشر الجواب')),
         ],
       ),
     );
     if (result == null || result.isEmpty) return;
-    await FirebaseFirestore.instance.collection('questions').doc(docId).update({
+    await FirebaseFirestore.instance
+        .collection('questions')
+        .doc(docId)
+        .update({
       'answer': result,
       'status': 'answered',
       'answeredAt': FieldValue.serverTimestamp(),
@@ -445,16 +537,20 @@ class _QACard extends StatelessWidget {
               child: const Text('إلغاء')),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('حذف', style: TextStyle(color: Colors.red))),
+              child: const Text('حذف',
+                  style: TextStyle(color: Colors.red))),
         ],
       ),
     );
     if (confirm != true) return;
-    await FirebaseFirestore.instance.collection('questions').doc(docId).delete();
+    await FirebaseFirestore.instance
+        .collection('questions')
+        .doc(docId)
+        .delete();
   }
 }
 
-// ─── Ask Sheet (submit form) ──────────────────────────────────────────────────
+// ─── Ask Sheet ────────────────────────────────────────────────────────────────
 
 class _AskSheet extends StatefulWidget {
   const _AskSheet();
@@ -478,14 +574,14 @@ class _AskSheetState extends State<_AskSheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -503,7 +599,8 @@ class _AskSheetState extends State<_AskSheet> {
             ),
             const SizedBox(height: 16),
             const Text('اطرح سؤالك',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style:
+                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             TextField(
               controller: _question,
@@ -554,80 +651,6 @@ class _AskSheetState extends State<_AskSheet> {
   }
 }
 
-// ─── Admin Login Button ───────────────────────────────────────────────────────
-
-class _AdminLoginButton extends StatefulWidget {
-  final VoidCallback onChanged;
-  const _AdminLoginButton({required this.onChanged});
-
-  @override
-  State<_AdminLoginButton> createState() => _AdminLoginButtonState();
-}
-
-class _AdminLoginButtonState extends State<_AdminLoginButton> {
-  bool _loading = false;
-
-  Future<void> _signIn() async {
-    setState(() => _loading = true);
-    try {
-      if (kIsWeb) {
-        await FirebaseAuth.instance.signInWithPopup(GoogleAuthProvider());
-      } else {
-        final googleUser = await GoogleSignIn().signIn();
-        if (googleUser == null) return;
-        final googleAuth = await googleUser.authentication;
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-        await FirebaseAuth.instance.signInWithCredential(credential);
-      }
-      widget.onChanged();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ في تسجيل الدخول: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _signOut() async {
-    await FirebaseAuth.instance.signOut();
-    if (!kIsWeb) await GoogleSignIn().signOut();
-    widget.onChanged();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Padding(
-        padding: EdgeInsets.all(14),
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-        ),
-      );
-    }
-    if (_isAdmin) {
-      return IconButton(
-        icon: const Icon(Icons.logout, color: Colors.white70),
-        tooltip: 'تسجيل خروج المشرف',
-        onPressed: _signOut,
-      );
-    }
-    return IconButton(
-      icon: const Icon(Icons.admin_panel_settings_outlined,
-          color: Colors.white70),
-      tooltip: 'دخول المشرف',
-      onPressed: _signIn,
-    );
-  }
-}
-
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
@@ -647,7 +670,8 @@ class _EmptyState extends StatelessWidget {
           Text(text,
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 15, color: cs.onSurface.withOpacity(0.6))),
+                  fontSize: 15,
+                  color: cs.onSurface.withOpacity(0.6))),
         ],
       ),
     );
