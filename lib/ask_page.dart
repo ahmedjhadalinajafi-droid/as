@@ -4,8 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'islamic_background.dart';
 
-// ─── Admin PIN (change this to whatever you want) ─────────────────────────────
-const _adminPin = '786786';
 const _deviceAdminKey = 'ask_device_admin';
 
 const _navy = Color(0xFF1B3D6F);
@@ -23,7 +21,6 @@ class AskPage extends StatefulWidget {
 class _AskPageState extends State<AskPage> {
   Set<String> _myIds = {};
   bool _isAdmin = false;
-  int _titleTaps = 0;
 
   @override
   void initState() {
@@ -41,92 +38,6 @@ class _AskPageState extends State<AskPage> {
     }
   }
 
-  // Tap the title 5 times to trigger admin PIN dialog
-  void _onTitleTap() {
-    _titleTaps++;
-    if (_titleTaps >= 5) {
-      _titleTaps = 0;
-      _showPinDialog();
-    }
-  }
-
-  Future<void> _showPinDialog() async {
-    final controller = TextEditingController();
-    final entered = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('دخول المشرف'),
-        content: TextField(
-          controller: controller,
-          obscureText: true,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: 'رمز الدخول',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10)),
-          ),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('إلغاء')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('دخول')),
-        ],
-      ),
-    );
-
-    if (entered == null) return;
-
-    if (entered == _adminPin) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_deviceAdminKey, true);
-      if (mounted) {
-        setState(() => _isAdmin = true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تفعيل صلاحيات المشرف على هذا الجهاز ✅'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('رمز غير صحيح'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _removeAdmin() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إلغاء صلاحيات المشرف'),
-        content: const Text('هل تريد إلغاء صلاحيات المشرف من هذا الجهاز؟'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('نعم', style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_deviceAdminKey, false);
-    if (mounted) setState(() => _isAdmin = false);
-  }
-
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -135,18 +46,7 @@ class _AskPageState extends State<AskPage> {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: GestureDetector(
-              onTap: _onTitleTap,
-              child: const Text('الأسئلة والأجوبة'),
-            ),
-            actions: [
-              if (_isAdmin)
-                IconButton(
-                  icon: const Icon(Icons.admin_panel_settings, color: _gold),
-                  tooltip: 'إلغاء صلاحيات المشرف',
-                  onPressed: _removeAdmin,
-                ),
-            ],
+            title: const Text('الأسئلة والأجوبة'),
             bottom: TabBar(
               isScrollable: false,
               indicatorColor: _gold,

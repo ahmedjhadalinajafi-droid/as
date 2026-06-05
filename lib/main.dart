@@ -2105,8 +2105,96 @@ class _HomeAnnouncementsSection extends StatelessWidget {
 
 // ─── More Page ────────────────────────────────────────────────────────────────
 
-class MorePage extends StatelessWidget {
+class MorePage extends StatefulWidget {
   const MorePage({super.key});
+
+  @override
+  State<MorePage> createState() => _MorePageState();
+}
+
+class _MorePageState extends State<MorePage> {
+  bool _isAdmin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAdmin();
+  }
+
+  Future<void> _loadAdmin() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) setState(() => _isAdmin = prefs.getBool('ask_device_admin') ?? false);
+  }
+
+  Future<void> _showPinDialog() async {
+    final controller = TextEditingController();
+    final entered = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('دخول المشرف'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'رمز الدخول',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, controller.text),
+              child: const Text('دخول')),
+        ],
+      ),
+    );
+    if (entered == null) return;
+    if (entered == '786786') {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('ask_device_admin', true);
+      if (mounted) {
+        setState(() => _isAdmin = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تفعيل صلاحيات المشرف على هذا الجهاز ✅'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('رمز غير صحيح'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeAdmin() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إلغاء صلاحيات المشرف'),
+        content: const Text('هل تريد إلغاء صلاحيات المشرف من هذا الجهاز؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('نعم', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('ask_device_admin', false);
+    if (mounted) setState(() => _isAdmin = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2188,16 +2276,79 @@ class MorePage extends StatelessWidget {
             ),
           ],
         ),
-        body: GridView.count(
-          crossAxisCount: 2,
+        body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-          mainAxisSpacing: 16,
-          crossAxisSpacing: 16,
-          children: items
-              .map(
-                (item) => _MoreCard(item: item),
-              )
-              .toList(),
+          children: [
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              children: items.map((item) => _MoreCard(item: item)).toList(),
+            ),
+            const SizedBox(height: 16),
+            // Admin card — always visible so any device can enter PIN
+            GestureDetector(
+              onTap: _isAdmin ? _removeAdmin : _showPinDialog,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                decoration: BoxDecoration(
+                  color: _isAdmin
+                      ? const Color(0xFF1B3D6F).withOpacity(0.08)
+                      : Colors.grey.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _isAdmin
+                        ? const Color(0xFF1B3D6F).withOpacity(0.3)
+                        : Colors.grey.withOpacity(0.2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isAdmin
+                          ? Icons.admin_panel_settings
+                          : Icons.lock_outline_rounded,
+                      color: _isAdmin ? const Color(0xFFC9A843) : Colors.grey,
+                      size: 26,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isAdmin ? 'وضع المشرف مفعّل' : 'دخول المشرف',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: _isAdmin
+                                  ? const Color(0xFF1B3D6F)
+                                  : Colors.grey,
+                            ),
+                          ),
+                          Text(
+                            _isAdmin
+                                ? 'اضغط لإلغاء الصلاحيات من هذا الجهاز'
+                                : 'أدخل رمز الدخول لتفعيل صلاحيات المشرف',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_left,
+                      color: Colors.grey.withOpacity(0.5),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
