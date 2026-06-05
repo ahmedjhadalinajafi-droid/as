@@ -339,23 +339,41 @@ class NotificationService {
     }
   }
 
-  void _listenForNewQuestions() {
-    bool initialized = false;
-    final seen = <String>{};
+  // Keeps the persisted "already notified" sets from growing forever.
+  static List<String> _capIds(Iterable<String> ids) {
+    final list = ids.toList();
+    return list.length > 300 ? list.sublist(list.length - 300) : list;
+  }
+
+  void _listenForNewQuestions() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Persisted across restarts so the admin gets caught up on questions that
+    // arrived while the app was closed, and a listener restart never wipes the
+    // baseline (which previously suppressed every notification).
+    final seen = (prefs.getStringList('notified_q_ids') ?? []).toSet();
+    bool seeded = prefs.getBool('notified_q_seeded') ?? false;
 
     _adminSub = FirebaseFirestore.instance
         .collection('questions')
         .where('status', isEqualTo: 'pending')
         .snapshots()
-        .listen((snap) {
-      if (!initialized) {
-        seen.addAll(snap.docs.map((d) => d.id));
-        initialized = true;
+        .listen((snap) async {
+      // First time this device becomes admin: remember the existing backlog
+      // silently instead of firing a notification for every old question.
+      if (!seeded) {
+        seen
+          ..clear()
+          ..addAll(snap.docs.map((d) => d.id));
+        await prefs.setStringList('notified_q_ids', _capIds(seen));
+        await prefs.setBool('notified_q_seeded', true);
+        seeded = true;
         return;
       }
+      bool changed = false;
       for (final doc in snap.docs) {
         if (seen.contains(doc.id)) continue;
         seen.add(doc.id);
+        changed = true;
         final q = (doc.data()['question'] as String? ?? '');
         final preview = q.length > 70 ? '${q.substring(0, 70)}…' : q;
         _local.show(
@@ -366,25 +384,41 @@ class NotificationService {
           payload: 'questions',
         );
       }
+      if (changed) await prefs.setStringList('notified_q_ids', _capIds(seen));
     }, onError: (e) => debugPrint('Admin question listener: $e'));
   }
 
-  void _listenForAnswers(List<String> myIds) {
+  void _listenForAnswers(List<String> myIds) async {
     final ids = myIds.take(10).toList();
-    bool initialized = false;
-    final notified = <String>{};
+    final prefs = await SharedPreferences.getInstance();
+    // Persisted so the client is caught up on answers received while the app
+    // was closed, and restarts don't re-notify the same answer.
+    final notified = (prefs.getStringList('notified_ans_ids') ?? []).toSet();
+    bool seeded = prefs.getBool('notified_ans_seeded') ?? false;
 
     _answerSub = FirebaseFirestore.instance
         .collection('questions')
         .where(FieldPath.documentId, whereIn: ids)
         .snapshots()
-        .listen((snap) {
+        .listen((snap) async {
+      // First run after this feature ships: record questions already answered
+      // (which the user has likely seen) without spamming notifications.
+      if (!seeded) {
+        for (final doc in snap.docs) {
+          if (doc.data()['status'] == 'answered') notified.add(doc.id);
+        }
+        await prefs.setStringList('notified_ans_ids', _capIds(notified));
+        await prefs.setBool('notified_ans_seeded', true);
+        seeded = true;
+        return;
+      }
+      bool changed = false;
       for (final doc in snap.docs) {
         final data = doc.data();
         if (data['status'] != 'answered') continue;
         if (notified.contains(doc.id)) continue;
         notified.add(doc.id);
-        if (!initialized) continue; // skip already-answered on first load
+        changed = true;
         final a = data['answer'] as String? ?? '';
         final preview = a.length > 70 ? '${a.substring(0, 70)}…' : a;
         _local.show(
@@ -395,7 +429,9 @@ class NotificationService {
           payload: 'questions',
         );
       }
-      initialized = true;
+      if (changed) {
+        await prefs.setStringList('notified_ans_ids', _capIds(notified));
+      }
     }, onError: (e) => debugPrint('Client answer listener: $e'));
   }
 
