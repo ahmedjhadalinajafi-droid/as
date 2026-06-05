@@ -73,23 +73,22 @@ Future<void> main() async {
           appId: '1:658803064168:web:410dacdec0e839da54eadd',
         ),
       );
-    } else if (defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS) {
-      // Explicit iOS config so the app connects even if GoogleService-Info.plist
-      // isn't bundled in the Xcode target. Values from the iOS app in Firebase.
+    } else if (Firebase.apps.isEmpty) {
+      // Pass options explicitly for iOS so it works regardless of whether
+      // GoogleService-Info.plist is bundled. Android uses google-services.json.
       await Firebase.initializeApp(
-        options: const FirebaseOptions(
-          apiKey: 'AIzaSyDXZ5eeDDV4Bv1UT281nvXdjTBDs-DfXZY',
-          appId: '1:658803064168:ios:4f822dba17860f1854eadd',
-          messagingSenderId: '658803064168',
-          projectId: 'masjid-405c1',
-          storageBucket: 'masjid-405c1.firebasestorage.app',
-          iosBundleId: 'com.ahmed.najafi.masjid',
-          databaseURL: 'https://masjid-405c1-default-rtdb.firebaseio.com',
-        ),
+        options: defaultTargetPlatform == TargetPlatform.iOS ||
+                defaultTargetPlatform == TargetPlatform.macOS
+            ? const FirebaseOptions(
+                apiKey: 'AIzaSyDXZ5eeDDV4Bv1UT281nvXdjTBDs-DfXZY',
+                appId: '1:658803064168:ios:4f822dba17860f1854eadd',
+                messagingSenderId: '658803064168',
+                projectId: 'masjid-405c1',
+                storageBucket: 'masjid-405c1.firebasestorage.app',
+                iosBundleId: 'com.ahmed.najafi.masjid',
+              )
+            : null,
       );
-    } else {
-      await Firebase.initializeApp();
     }
   } catch (e) {
     debugPrint('Firebase init failed: $e');
