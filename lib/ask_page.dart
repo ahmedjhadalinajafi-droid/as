@@ -109,27 +109,40 @@ class _AskPageState extends State<AskPage> {
       return;
     }
 
-    final doc = await FirebaseFirestore.instance.collection('questions').add({
-      'question': result['question'],
-      'name': result['name'] ?? '',
-      'answer': '',
-      'status': 'pending',
-      'askedAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      final doc = await FirebaseFirestore.instance.collection('questions').add({
+        'question': result['question'],
+        'name': result['name'] ?? '',
+        'answer': '',
+        'status': 'pending',
+        'askedAt': FieldValue.serverTimestamp(),
+      });
 
-    final prefs = await SharedPreferences.getInstance();
-    final ids = prefs.getStringList('my_questions') ?? [];
-    ids.add(doc.id);
-    await prefs.setStringList('my_questions', ids);
-    await _load();
+      final prefs = await SharedPreferences.getInstance();
+      final ids = prefs.getStringList('my_questions') ?? [];
+      ids.add(doc.id);
+      await prefs.setStringList('my_questions', ids);
+      await _load();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم إرسال سؤالك ✅ سيظهر الجواب في "أسئلتي"'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم إرسال سؤالك ✅ سيظهر الجواب في "أسئلتي"'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل إرسال السؤال: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
     }
   }
 }
