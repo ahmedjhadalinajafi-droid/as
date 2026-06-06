@@ -18,6 +18,14 @@ const _gold = Color(0xFFC9A843);
 // Same secret-key admin flag used by the events and Q&A pages.
 const _deviceAdminKey = 'ask_device_admin';
 
+// Splits a stored contact string (numbers separated by , ، ; or newlines)
+// into a clean list of individual numbers.
+List<String> _parseContacts(String raw) => raw
+    .split(RegExp(r'[,\n;،]'))
+    .map((s) => s.trim())
+    .where((s) => s.isNotEmpty)
+    .toList();
+
 // ─── Trips Page ────────────────────────────────────────────────────────────────
 
 class TripsPage extends StatefulWidget {
@@ -243,7 +251,7 @@ class _TripCard extends StatelessWidget {
     final description = data['description'] as String? ?? '';
     final destination = data['destination'] as String? ?? '';
     final cost        = data['cost']        as String? ?? '';
-    final contact     = data['contact']     as String? ?? '';
+    final contacts    = _parseContacts(data['contact'] as String? ?? '');
     final imageBase64 = data['imageBase64'] as String? ?? '';
     final imageUrl    = data['imageUrl']    as String? ?? '';
     final ts          = data['date']        as Timestamp?;
@@ -482,24 +490,29 @@ class _TripCard extends StatelessWidget {
                     ],
                   ),
 
-                  // Booking button
-                  if (!isPast && contact.isNotEmpty) ...[
+                  // Booking buttons — one per contact number
+                  if (!isPast && contacts.isNotEmpty) ...[
                     const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _book(contact),
-                        icon: const Icon(Icons.chat, size: 18),
-                        label: const Text('احجز الآن'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1B7A4B),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                    for (int i = 0; i < contacts.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _book(contacts[i]),
+                          icon: const Icon(Icons.chat, size: 18),
+                          label: Text(contacts.length == 1
+                              ? 'احجز الآن'
+                              : 'احجز: ${contacts[i]}'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1B7A4B),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ],
               ),
@@ -607,7 +620,8 @@ class _AddTripPageState extends State<_AddTripPage> {
   final _description = TextEditingController();
   final _destination = TextEditingController();
   final _cost = TextEditingController();
-  final _contact = TextEditingController();
+  // One controller per booking number; starts with a single empty field.
+  final List<TextEditingController> _contacts = [TextEditingController()];
   DateTime? _date;
   bool _boosted = false;
   Uint8List? _imageBytes;
@@ -624,11 +638,28 @@ class _AddTripPageState extends State<_AddTripPage> {
       _description.text = d['description'] as String? ?? '';
       _destination.text = d['destination'] as String? ?? '';
       _cost.text = d['cost'] as String? ?? '';
-      _contact.text = d['contact'] as String? ?? '';
+      final existing = _parseContacts(d['contact'] as String? ?? '');
+      if (existing.isNotEmpty) {
+        _contacts
+          ..clear()
+          ..addAll(existing.map((c) => TextEditingController(text: c)));
+      }
       _boosted = (d['boosted'] as bool?) ?? false;
       final ts = d['date'];
       if (ts is Timestamp) _date = ts.toDate();
     }
+  }
+
+  void _addContactField() {
+    setState(() => _contacts.add(TextEditingController()));
+  }
+
+  void _removeContactField(int i) {
+    setState(() {
+      _contacts[i].dispose();
+      _contacts.removeAt(i);
+      if (_contacts.isEmpty) _contacts.add(TextEditingController());
+    });
   }
 
   @override
@@ -637,7 +668,9 @@ class _AddTripPageState extends State<_AddTripPage> {
     _description.dispose();
     _destination.dispose();
     _cost.dispose();
-    _contact.dispose();
+    for (final c in _contacts) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -681,12 +714,18 @@ class _AddTripPageState extends State<_AddTripPage> {
     setState(() => _uploading = true);
 
     try {
+      // Join all non-empty numbers with a comma; the card splits them back.
+      final contactsJoined = _contacts
+          .map((c) => c.text.trim())
+          .where((s) => s.isNotEmpty)
+          .join(', ');
+
       final data = <String, dynamic>{
         'title': _title.text.trim(),
         'description': _description.text.trim(),
         'destination': _destination.text.trim(),
         'cost': _cost.text.trim(),
-        'contact': _contact.text.trim(),
+        'contact': contactsJoined,
         'boosted': _boosted,
         'date': Timestamp.fromDate(_date!),
       };
@@ -875,16 +914,52 @@ class _AddTripPageState extends State<_AddTripPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // Contact / booking number
-                TextFormField(
-                  controller: _contact,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: 'رقم الحجز / واتساب (اختياري)',
-                    prefixIcon: const Icon(Icons.chat, color: Color(0xFF1B7A4B)),
-                    hintText: '+9647xxxxxxxxx',
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                // Contact / booking numbers — supports more than one
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('أرقام الحجز / واتساب (اختياري)',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface.withOpacity(0.7))),
+                ),
+                const SizedBox(height: 6),
+                for (int i = 0; i < _contacts.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _contacts[i],
+                            keyboardType: TextInputType.phone,
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.chat,
+                                  color: Color(0xFF1B7A4B)),
+                              hintText: '+9647xxxxxxxxx',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                        if (_contacts.length > 1)
+                          IconButton(
+                            onPressed: () => _removeContactField(i),
+                            icon: const Icon(Icons.remove_circle_outline,
+                                color: Colors.red),
+                            tooltip: 'حذف الرقم',
+                          ),
+                      ],
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _addContactField,
+                    icon: const Icon(Icons.add_circle_outline,
+                        color: Color(0xFF1B7A4B)),
+                    label: const Text('إضافة رقم آخر',
+                        style: TextStyle(color: Color(0xFF1B7A4B))),
                   ),
                 ),
                 const SizedBox(height: 12),

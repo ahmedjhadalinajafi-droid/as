@@ -395,7 +395,7 @@ $tab = $_GET['tab'] ?? 'events';
         <label>موعد الانطلاق</label>
         <input type="datetime-local" name="date" required value="<?= h(dt_local($ed['date'] ?? '')) ?>">
         <label>التكلفة (مثال: 25 ألف دينار)</label><input name="cost" value="<?= h($ed['cost'] ?? '') ?>">
-        <label>رقم الحجز / واتساب</label><input name="contact" placeholder="+9647xxxxxxxxx" value="<?= h($ed['contact'] ?? '') ?>">
+        <label>أرقام الحجز / واتساب (افصل بين الأرقام بفاصلة)</label><input name="contact" placeholder="+9647xxxxxxxxx، +9647yyyyyyyyy" value="<?= h($ed['contact'] ?? '') ?>">
         <label>تفاصيل الرحلة</label><textarea name="description" rows="3"><?= h($ed['description'] ?? '') ?></textarea>
         <label>صورة <?= $isEdit ? '(اتركها فارغة للإبقاء على الصورة الحالية)' : '' ?></label>
         <input type="file" name="image" accept="image/*">
