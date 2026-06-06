@@ -638,8 +638,7 @@ class _ReaderPageState extends State<_ReaderPage> {
     final isDark = cs.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A1628) : const Color(0xFFFAF8F0),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: _navy,
         foregroundColor: Colors.white,
@@ -664,7 +663,8 @@ class _ReaderPageState extends State<_ReaderPage> {
           ),
         ],
       ),
-      body: Column(
+      body: IslamicPatternBackground(
+        child: Column(
         children: [
           // ── Navigation bar (Arabic book convention, matches Quran) ──
           // RIGHT side → previous chapter, LEFT side → next chapter
@@ -733,70 +733,107 @@ class _ReaderPageState extends State<_ReaderPage> {
                   final ch = widget.chapters[i];
                   return SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Decorative top line
-                        Center(
-                          child: Container(
-                            width: 60,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: _gold,
-                              borderRadius: BorderRadius.circular(2),
+                    padding: const EdgeInsets.fromLTRB(12, 14, 12, 30),
+                    child: Directionality(
+                      textDirection: TextDirection.rtl,
+                      // Rounded reading card on the patterned background.
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF16243F)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: _gold.withOpacity(isDark ? 0.22 : 0.30),
+                            width: 0.8,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(
+                                  isDark ? 0.30 : 0.06),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(height: 20),
-
-                        // Title
-                        Text(
-                          ch.title,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontFamily: 'ScheherazadeNew',
-                            fontSize: _fontSize + 6,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? _gold : _navy,
-                          ),
-                        ),
-
-                        if (ch.subtitle.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            ch.subtitle,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: 'ScheherazadeNew',
-                              fontSize: _fontSize - 2,
-                              color: cs.onSurface.withOpacity(0.55),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Title
+                            Text(
+                              ch.title,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: 'ScheherazadeNew',
+                                fontSize: _fontSize + 7,
+                                fontWeight: FontWeight.bold,
+                                height: 1.5,
+                                color: isDark ? _gold : _navy,
+                              ),
                             ),
-                          ),
-                        ],
 
-                        const SizedBox(height: 24),
-                        Container(
-                          height: 1,
-                          color: _gold.withOpacity(0.3),
-                        ),
-                        const SizedBox(height: 24),
+                            if (ch.subtitle.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                ch.subtitle,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'ScheherazadeNew',
+                                  fontSize: _fontSize - 1,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.6,
+                                  color: cs.onSurface.withOpacity(0.6),
+                                ),
+                              ),
+                            ],
 
-                        // Content
-                        SelectableText(
-                          ch.content,
-                          textDirection: TextDirection.rtl,
-                          textAlign: TextAlign.justify,
-                          style: TextStyle(
-                            fontFamily: 'ScheherazadeNew',
-                            fontSize: _fontSize,
-                            height: 2.2,
-                            color: isDark
-                                ? Colors.white.withOpacity(0.9)
-                                : const Color(0xFF1A1A1A),
-                          ),
+                            const SizedBox(height: 18),
+                            // Gold divider with a centered diamond
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    color: _gold.withOpacity(0.30),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8),
+                                  child: Icon(Icons.brightness_1,
+                                      size: 7,
+                                      color: _gold.withOpacity(0.7)),
+                                ),
+                                Expanded(
+                                  child: Container(
+                                    height: 1,
+                                    color: _gold.withOpacity(0.30),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 22),
+
+                            // Content — justified, generous spacing, readable weight
+                            SelectableText(
+                              ch.content,
+                              textDirection: TextDirection.rtl,
+                              textAlign: TextAlign.justify,
+                              style: TextStyle(
+                                fontFamily: 'ScheherazadeNew',
+                                fontSize: _fontSize,
+                                height: 2.1,
+                                fontWeight: FontWeight.w500,
+                                color: isDark
+                                    ? const Color(0xFFF1ECE0)
+                                    : const Color(0xFF15233B),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   );
                 },
@@ -804,6 +841,7 @@ class _ReaderPageState extends State<_ReaderPage> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
