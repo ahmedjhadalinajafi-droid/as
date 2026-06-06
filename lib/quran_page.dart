@@ -958,28 +958,36 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
       ),
       body: Column(
         children: [
-          // Audio bar
+          // Audio bar — kept compact so more Quran lines stay visible
           Container(
             color: cs.primary.withOpacity(0.08),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
                     IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                       onPressed: _currentIndex > 0
                           ? () => _goTo(_currentIndex - 1)
                           : null,
-                      icon: const Icon(Icons.skip_next),
+                      icon: const Icon(Icons.skip_next, size: 24),
                     ),
+                    const SizedBox(width: 4),
                     _audioLoading
                         ? const SizedBox(
-                            width: 40,
-                            height: 40,
+                            width: 34,
+                            height: 34,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : IconButton(
-                            iconSize: 36,
+                            iconSize: 34,
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                             onPressed: isDone
                                 ? () async {
                                     await _player.seek(Duration.zero);
@@ -995,57 +1003,71 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
                               color: cs.primary,
                             ),
                           ),
+                    const SizedBox(width: 4),
                     IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                         onPressed: _stopAudio,
-                        icon: const Icon(Icons.stop)),
+                        icon: const Icon(Icons.stop, size: 22)),
+                    const SizedBox(width: 4),
                     IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                       onPressed: _currentIndex < widget.surahs.length - 1
                           ? () => _goTo(_currentIndex + 1)
                           : null,
-                      icon: const Icon(Icons.skip_previous),
+                      icon: const Icon(Icons.skip_previous, size: 24),
                     ),
+                    const SizedBox(width: 6),
                     // Playback speed (1x / 1.5x / 2x)
-                    TextButton(
-                      onPressed: _cycleSpeed,
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(40, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        foregroundColor: cs.primary,
-                      ),
-                      child: Text(
-                        _speedLabel,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14),
+                    GestureDetector(
+                      onTap: _cycleSpeed,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: cs.primary.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _speedLabel,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: cs.primary),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             'الشيخ أحمد الدباغ',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11,
                               color: cs.onSurface.withOpacity(0.6),
                             ),
                           ),
                           Text('${_fmt(_position)} / ${_fmt(_duration)}',
-                              style: const TextStyle(fontSize: 12)),
+                              style: const TextStyle(fontSize: 11)),
                         ],
                       ),
                     ),
                   ],
                 ),
                 if (_duration.inSeconds > 0)
-                  Slider(
-                    value: _position.inSeconds
-                        .clamp(0, _duration.inSeconds)
-                        .toDouble(),
-                    max: _duration.inSeconds.toDouble(),
-                    onChanged: (v) =>
-                        _player.seek(Duration(seconds: v.toInt())),
-                    activeColor: cs.primary,
+                  SliderCompact(
+                    position: _position,
+                    duration: _duration,
+                    color: cs.primary,
+                    onSeek: (s) => _player.seek(Duration(seconds: s)),
                   ),
               ],
             ),
@@ -1278,6 +1300,45 @@ class _SurahContentState extends State<_SurahContent> {
           ),
           const SizedBox(height: 40),
         ],
+      ),
+    );
+  }
+}
+
+// A thin seek bar that takes far less vertical space than the default Slider,
+// so more Quran text stays visible (especially in landscape).
+class SliderCompact extends StatelessWidget {
+  final Duration position;
+  final Duration duration;
+  final Color color;
+  final void Function(int seconds) onSeek;
+  const SliderCompact({
+    super.key,
+    required this.position,
+    required this.duration,
+    required this.color,
+    required this.onSeek,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final max = duration.inSeconds.toDouble();
+    final val = position.inSeconds.clamp(0, duration.inSeconds).toDouble();
+    return SliderTheme(
+      data: SliderThemeData(
+        trackHeight: 2,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+        activeTrackColor: color,
+        thumbColor: color,
+      ),
+      child: SizedBox(
+        height: 22,
+        child: Slider(
+          value: val,
+          max: max <= 0 ? 1 : max,
+          onChanged: (v) => onSeek(v.toInt()),
+        ),
       ),
     );
   }
