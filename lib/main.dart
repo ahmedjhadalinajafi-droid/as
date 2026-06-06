@@ -266,7 +266,7 @@ class _MainShellState extends State<MainShell> {
     MorePage.new,
   ];
 
-  // Maps FCM data['page'] values to tab indices
+  // Maps FCM data['page'] values to bottom-nav tab indices (top-level screens).
   static const _pageIndexMap = {
     'home': 0,
     'prayer': 1,
@@ -274,11 +274,17 @@ class _MainShellState extends State<MainShell> {
     'events': 3,
     'campaigns': 4,
     'more': 5,
-    'announcements': 5,
-    'mafatih': 5,
-    'ziyarat': 5,
-    'trips': 5,
-    'quran': 5,
+  };
+
+  // Sub-pages that live under "More" — a notification for one of these should
+  // OPEN the real screen, not just land on the More tab.
+  static final _subPages = <String, Widget Function()>{
+    'announcements': () => const AnnouncementsPage(),
+    'trips': () => const TripsPage(),
+    'questions': () => const AskPage(),
+    'mafatih': () => const MafatihPage(),
+    'ziyarat': () => const ZiyaratPage(),
+    'quran': () => const QuranPage(),
   };
 
   Widget _page(int i) => _pageCache.putIfAbsent(i, () => _pageBuilders[i]());
@@ -287,8 +293,26 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _navSub = NotificationService.navStream.listen((page) {
+      if (!mounted) return;
+      // Top-level screen → just switch tabs.
       final idx = _pageIndexMap[page];
-      if (idx != null && mounted) setState(() => _currentIndex = idx);
+      if (idx != null) {
+        setState(() => _currentIndex = idx);
+        return;
+      }
+      // Sub-page → switch to More as the base, then push the real screen.
+      final builder = _subPages[page];
+      if (builder != null) {
+        setState(() => _currentIndex = 5);
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => Directionality(
+              textDirection: TextDirection.rtl,
+              child: builder(),
+            ),
+          ),
+        );
+      }
     });
     // After first frame, check the Hostinger version.json for a newer build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
