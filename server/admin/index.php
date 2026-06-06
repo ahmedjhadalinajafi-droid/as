@@ -63,6 +63,15 @@ function broadcast_push(string $title, string $body, string $page): string {
     }
 }
 
+// Turns a Firestore [code, data] result into a flash message, surfacing the
+// real error when a write fails (instead of pretending it succeeded).
+function fs_flash(array $res, string $okMsg): string {
+    [$code, $data] = $res;
+    if ($code === 200) return '✅ ' . $okMsg;
+    $err = $data['error']['message'] ?? json_encode($data, JSON_UNESCAPED_UNICODE);
+    return "❌ فشلت العملية (رمز $code): $err";
+}
+
 // ---- actions (only when logged in) ---------------------------------------
 $flash = '';
 if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -72,7 +81,7 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $img = admin_save_image('image');
         $dt  = $_POST['date'] ? new DateTime($_POST['date']) : new DateTime();
         $title = trim($_POST['title'] ?? '');
-        fs_add('events', [
+        $res = fs_add('events', [
             'title'       => $title,
             'description' => trim($_POST['description'] ?? ''),
             'location'    => trim($_POST['location'] ?? ''),
@@ -82,10 +91,10 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'date'        => $dt,
             'createdAt'   => new DateTime(),
         ]);
-        if (isset($_POST['notify'])) {
+        if ($res[0] === 200 && isset($_POST['notify'])) {
             broadcast_push('فعالية جديدة 🗓️', $title, 'events');
         }
-        $flash = 'تمت إضافة الفعالية';
+        $flash = fs_flash($res, 'تمت إضافة الفعالية');
     }
 
     if ($action === 'delete_event') {
@@ -98,7 +107,7 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $dt  = $_POST['date'] ? new DateTime($_POST['date']) : new DateTime();
         $title = trim($_POST['title'] ?? '');
         $dest  = trim($_POST['destination'] ?? '');
-        fs_add('trips', [
+        $res = fs_add('trips', [
             'title'       => $title,
             'description' => trim($_POST['description'] ?? ''),
             'destination' => $dest,
@@ -109,11 +118,11 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'date'        => $dt,
             'createdAt'   => new DateTime(),
         ]);
-        if (isset($_POST['notify'])) {
+        if ($res[0] === 200 && isset($_POST['notify'])) {
             $b = $dest !== '' ? "$title — $dest" : $title;
             broadcast_push('رحلة جديدة 🚌', $b, 'trips');
         }
-        $flash = 'تمت إضافة الرحلة';
+        $flash = fs_flash($res, 'تمت إضافة الرحلة');
     }
 
     if ($action === 'delete_trip') {
@@ -125,21 +134,21 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $img = admin_save_image('image');
         $title = trim($_POST['title'] ?? '');
         $bodyText = trim($_POST['body'] ?? '');
-        fs_add('announcements', [
+        $res = fs_add('announcements', [
             'title'     => $title,
             'body'      => $bodyText,
             'imageUrl'  => $img,
             'linkUrl'   => trim($_POST['link'] ?? ''),
             'createdAt' => new DateTime(),
         ]);
-        if (isset($_POST['notify'])) {
+        if ($res[0] === 200 && isset($_POST['notify'])) {
             broadcast_push(
                 $title !== '' ? $title : 'إعلان جديد 📢',
                 $bodyText !== '' ? $bodyText : 'تم نشر إعلان جديد',
                 'announcements'
             );
         }
-        $flash = 'تمت إضافة الإعلان';
+        $flash = fs_flash($res, 'تمت إضافة الإعلان');
     }
 
     if ($action === 'delete_announcement') {
@@ -172,11 +181,11 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'answeredAt' => new DateTime(),
         ];
         if ($img !== '') $fields['answerImageUrl'] = $img;
-        fs_update('questions', $_POST['id'], $fields);
+        $res = fs_update('questions', $_POST['id'], $fields);
 
         // Push the answer to the client who asked.
         $token = trim($_POST['clientToken'] ?? '');
-        if ($token !== '') {
+        if ($res[0] === 200 && $token !== '') {
             try {
                 $a = $fields['answer'];
                 fcm_send(['token' => $token], 'تم الرد على سؤالك ✅',
@@ -184,7 +193,7 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     ['page' => 'questions']);
             } catch (Throwable $e) { /* ignore push errors */ }
         }
-        $flash = 'تم نشر الجواب';
+        $flash = fs_flash($res, 'تم نشر الجواب');
     }
 
     if ($action === 'delete_question') {
