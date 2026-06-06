@@ -200,9 +200,55 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         fs_delete('questions', $_POST['id']);
         $flash = 'تم حذف السؤال';
     }
+
+    if ($action === 'edit_event') {
+        $fields = [
+            'title'       => trim($_POST['title'] ?? ''),
+            'description' => trim($_POST['description'] ?? ''),
+            'location'    => trim($_POST['location'] ?? ''),
+            'category'    => $_POST['category'] ?? 'فعالية',
+            'boosted'     => isset($_POST['boosted']),
+            'date'        => $_POST['date'] ? new DateTime($_POST['date']) : new DateTime(),
+        ];
+        $img = admin_save_image('image');
+        if ($img !== '') $fields['imageUrl'] = $img;
+        $res = fs_update('events', $_POST['id'], $fields);
+        $flash = fs_flash($res, 'تم تعديل الفعالية');
+    }
+
+    if ($action === 'edit_trip') {
+        $fields = [
+            'title'       => trim($_POST['title'] ?? ''),
+            'description' => trim($_POST['description'] ?? ''),
+            'destination' => trim($_POST['destination'] ?? ''),
+            'cost'        => trim($_POST['cost'] ?? ''),
+            'contact'     => trim($_POST['contact'] ?? ''),
+            'boosted'     => isset($_POST['boosted']),
+            'date'        => $_POST['date'] ? new DateTime($_POST['date']) : new DateTime(),
+        ];
+        $img = admin_save_image('image');
+        if ($img !== '') $fields['imageUrl'] = $img;
+        $res = fs_update('trips', $_POST['id'], $fields);
+        $flash = fs_flash($res, 'تم تعديل الرحلة');
+    }
+
+    if ($action === 'edit_question') {
+        $res = fs_update('questions', $_POST['id'],
+            ['question' => trim($_POST['question'] ?? '')]);
+        $flash = fs_flash($res, 'تم تعديل نص السؤال');
+    }
 }
 
 function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+
+// Converts a stored Firestore ISO timestamp into a value for <input
+// type="datetime-local"> (Y-m-d\TH:i), or '' when absent/invalid.
+function dt_local($iso): string {
+    if (!$iso) return '';
+    try { return (new DateTime((string)$iso))->format('Y-m-d\TH:i'); }
+    catch (Throwable $e) { return ''; }
+}
+
 $tab = $_GET['tab'] ?? 'events';
 ?>
 <!DOCTYPE html>
@@ -233,6 +279,11 @@ $tab = $_GET['tab'] ?? 'events';
   button { background:var(--navy); color:#fff; border:0; padding:11px 18px;
            border-radius:10px; font-weight:bold; cursor:pointer; font-size:15px; }
   button.danger { background:#c62828; padding:7px 12px; font-size:13px; }
+  a.editbtn { background:var(--gold); color:#1a1a1a; padding:7px 12px;
+              border-radius:10px; font-size:13px; font-weight:bold;
+              text-decoration:none; display:inline-block; }
+  .actions { display:flex; gap:6px; align-items:center; }
+  .cancel { color:#5a6b88; text-decoration:none; margin-right:10px; font-size:14px; }
   .flash { background:#1b7a4b; padding:10px 16px; border-radius:10px;
            margin:14px 20px; }
   .muted { color:#5a6b88; font-size:13px; }
@@ -272,76 +323,104 @@ $tab = $_GET['tab'] ?? 'events';
   <div class="wrap">
 
   <?php if ($tab === 'events'):
-      $cats = ['فعالية','محاضرة','خطبة الجمعة','مناسبة دينية','إعلان عام']; ?>
-    <div class="card">
-      <h3 style="margin-top:0">➕ فعالية جديدة</h3>
-      <form method="post" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="add_event">
-        <label>العنوان</label><input name="title" required>
-        <label>النوع</label>
-        <select name="category">
-          <?php foreach ($cats as $c): ?><option><?= h($c) ?></option><?php endforeach; ?>
-        </select>
-        <label>التاريخ والوقت</label>
-        <input type="datetime-local" name="date" required>
-        <label>المكان</label><input name="location">
-        <label>الوصف</label><textarea name="description" rows="3"></textarea>
-        <label>صورة</label><input type="file" name="image" accept="image/*">
-        <label><input type="checkbox" name="boosted" style="width:auto"> تمييز (مميز)</label><br>
-        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br><br>
-        <button>نشر الفعالية</button>
-      </form>
-    </div>
-    <?php
+      $cats = ['فعالية','محاضرة','خطبة الجمعة','مناسبة دينية','إعلان عام'];
       $events = fs_list('events');
       usort($events, fn($a,$b) => ($b['date']??'') <=> ($a['date']??''));
-      foreach ($events as $e): ?>
+      $ed = null;
+      if (!empty($_GET['edit'])) {
+          foreach ($events as $e) if (($e['_id'] ?? '') === $_GET['edit']) { $ed = $e; break; }
+      }
+      $isEdit = $ed !== null; ?>
+    <div class="card">
+      <h3 style="margin-top:0"><?= $isEdit ? '✏️ تعديل الفعالية' : '➕ فعالية جديدة' ?></h3>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="<?= $isEdit ? 'edit_event' : 'add_event' ?>">
+        <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= h($ed['_id']) ?>"><?php endif; ?>
+        <label>العنوان</label><input name="title" required value="<?= h($ed['title'] ?? '') ?>">
+        <label>النوع</label>
+        <select name="category">
+          <?php foreach ($cats as $c): ?>
+            <option <?= ($ed['category'] ?? '')===$c?'selected':'' ?>><?= h($c) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <label>التاريخ والوقت</label>
+        <input type="datetime-local" name="date" required value="<?= h(dt_local($ed['date'] ?? '')) ?>">
+        <label>المكان</label><input name="location" value="<?= h($ed['location'] ?? '') ?>">
+        <label>الوصف</label><textarea name="description" rows="3"><?= h($ed['description'] ?? '') ?></textarea>
+        <label>صورة <?= $isEdit ? '(اتركها فارغة للإبقاء على الصورة الحالية)' : '' ?></label>
+        <input type="file" name="image" accept="image/*">
+        <label><input type="checkbox" name="boosted" style="width:auto" <?= !empty($ed['boosted'])?'checked':'' ?>> تمييز (مميز)</label><br>
+        <?php if (!$isEdit): ?>
+        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br>
+        <?php endif; ?>
+        <br>
+        <button><?= $isEdit ? 'حفظ التعديل' : 'نشر الفعالية' ?></button>
+        <?php if ($isEdit): ?><a href="?tab=events" class="cancel">إلغاء</a><?php endif; ?>
+      </form>
+    </div>
+    <?php foreach ($events as $e): ?>
       <div class="card">
         <?php if (!empty($e['imageUrl'])): ?><img src="<?= h($e['imageUrl']) ?>"><?php endif; ?>
         <div class="row">
           <strong><?= h($e['title'] ?? '') ?></strong>
-          <form method="post" onsubmit="return confirm('حذف؟')">
-            <input type="hidden" name="action" value="delete_event">
-            <input type="hidden" name="id" value="<?= h($e['_id']) ?>">
-            <button class="danger">حذف</button>
-          </form>
+          <div class="actions">
+            <a class="editbtn" href="?tab=events&edit=<?= h($e['_id']) ?>">تعديل</a>
+            <form method="post" onsubmit="return confirm('حذف؟')">
+              <input type="hidden" name="action" value="delete_event">
+              <input type="hidden" name="id" value="<?= h($e['_id']) ?>">
+              <button class="danger">حذف</button>
+            </form>
+          </div>
         </div>
         <div class="muted"><?= h($e['category'] ?? '') ?> · <?= h($e['date'] ?? '') ?></div>
         <?php if (!empty($e['description'])): ?><p><?= h($e['description']) ?></p><?php endif; ?>
       </div>
     <?php endforeach; ?>
 
-  <?php elseif ($tab === 'trips'): ?>
-    <div class="card">
-      <h3 style="margin-top:0">➕ رحلة جديدة</h3>
-      <form method="post" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="add_trip">
-        <label>عنوان الرحلة</label><input name="title" required>
-        <label>الوجهة (مثال: كربلاء المقدسة)</label><input name="destination">
-        <label>موعد الانطلاق</label>
-        <input type="datetime-local" name="date" required>
-        <label>التكلفة (مثال: 25 ألف دينار)</label><input name="cost">
-        <label>رقم الحجز / واتساب</label><input name="contact" placeholder="+9647xxxxxxxxx">
-        <label>تفاصيل الرحلة</label><textarea name="description" rows="3"></textarea>
-        <label>صورة</label><input type="file" name="image" accept="image/*">
-        <label><input type="checkbox" name="boosted" style="width:auto"> تمييز (مميز)</label><br>
-        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br><br>
-        <button>نشر الرحلة</button>
-      </form>
-    </div>
-    <?php
+  <?php elseif ($tab === 'trips'):
       $trips = fs_list('trips');
       usort($trips, fn($a,$b) => ($b['date']??'') <=> ($a['date']??''));
-      foreach ($trips as $t): ?>
+      $ed = null;
+      if (!empty($_GET['edit'])) {
+          foreach ($trips as $t) if (($t['_id'] ?? '') === $_GET['edit']) { $ed = $t; break; }
+      }
+      $isEdit = $ed !== null; ?>
+    <div class="card">
+      <h3 style="margin-top:0"><?= $isEdit ? '✏️ تعديل الرحلة' : '➕ رحلة جديدة' ?></h3>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="<?= $isEdit ? 'edit_trip' : 'add_trip' ?>">
+        <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= h($ed['_id']) ?>"><?php endif; ?>
+        <label>عنوان الرحلة</label><input name="title" required value="<?= h($ed['title'] ?? '') ?>">
+        <label>الوجهة (مثال: كربلاء المقدسة)</label><input name="destination" value="<?= h($ed['destination'] ?? '') ?>">
+        <label>موعد الانطلاق</label>
+        <input type="datetime-local" name="date" required value="<?= h(dt_local($ed['date'] ?? '')) ?>">
+        <label>التكلفة (مثال: 25 ألف دينار)</label><input name="cost" value="<?= h($ed['cost'] ?? '') ?>">
+        <label>رقم الحجز / واتساب</label><input name="contact" placeholder="+9647xxxxxxxxx" value="<?= h($ed['contact'] ?? '') ?>">
+        <label>تفاصيل الرحلة</label><textarea name="description" rows="3"><?= h($ed['description'] ?? '') ?></textarea>
+        <label>صورة <?= $isEdit ? '(اتركها فارغة للإبقاء على الصورة الحالية)' : '' ?></label>
+        <input type="file" name="image" accept="image/*">
+        <label><input type="checkbox" name="boosted" style="width:auto" <?= !empty($ed['boosted'])?'checked':'' ?>> تمييز (مميز)</label><br>
+        <?php if (!$isEdit): ?>
+        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br>
+        <?php endif; ?>
+        <br>
+        <button><?= $isEdit ? 'حفظ التعديل' : 'نشر الرحلة' ?></button>
+        <?php if ($isEdit): ?><a href="?tab=trips" class="cancel">إلغاء</a><?php endif; ?>
+      </form>
+    </div>
+    <?php foreach ($trips as $t): ?>
       <div class="card">
         <?php if (!empty($t['imageUrl'])): ?><img src="<?= h($t['imageUrl']) ?>"><?php endif; ?>
         <div class="row">
           <strong><?= h($t['title'] ?? '') ?></strong>
-          <form method="post" onsubmit="return confirm('حذف؟')">
-            <input type="hidden" name="action" value="delete_trip">
-            <input type="hidden" name="id" value="<?= h($t['_id']) ?>">
-            <button class="danger">حذف</button>
-          </form>
+          <div class="actions">
+            <a class="editbtn" href="?tab=trips&edit=<?= h($t['_id']) ?>">تعديل</a>
+            <form method="post" onsubmit="return confirm('حذف؟')">
+              <input type="hidden" name="action" value="delete_trip">
+              <input type="hidden" name="id" value="<?= h($t['_id']) ?>">
+              <button class="danger">حذف</button>
+            </form>
+          </div>
         </div>
         <div class="muted">
           <?= h($t['destination'] ?? '') ?>
@@ -425,6 +504,15 @@ $tab = $_GET['tab'] ?? 'events';
           <p style="background:#e8f5ee;padding:10px;border-radius:8px">
             <?= h($q['answer'] ?? '') ?></p>
         <?php endif; ?>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;color:#5a6b88;font-size:13px">✏️ تعديل نص السؤال</summary>
+          <form method="post" style="margin-top:6px">
+            <input type="hidden" name="action" value="edit_question">
+            <input type="hidden" name="id" value="<?= h($q['_id']) ?>">
+            <textarea name="question" rows="2"><?= h($q['question'] ?? '') ?></textarea>
+            <button>حفظ نص السؤال</button>
+          </form>
+        </details>
         <form method="post" enctype="multipart/form-data" style="margin-top:8px">
           <input type="hidden" name="action" value="answer_question">
           <input type="hidden" name="id" value="<?= h($q['_id']) ?>">

@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
+import 'photo_viewer.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -284,6 +285,8 @@ class _TripCard extends StatelessWidget {
             // Image — base64 (Firestore) preferred, hosted URL fallback
             if (imageBase64.isNotEmpty)
               _TripImage(
+                fullImage: MemoryImage(base64Decode(imageBase64)),
+                isPast: isPast,
                 child: Image.memory(
                   base64Decode(imageBase64),
                   height: 180,
@@ -291,10 +294,11 @@ class _TripCard extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
-                isPast: isPast,
               )
             else if (imageUrl.isNotEmpty)
               _TripImage(
+                fullImage: CachedNetworkImageProvider(imageUrl),
+                isPast: isPast,
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   height: 180,
@@ -307,7 +311,6 @@ class _TripCard extends StatelessWidget {
                   ),
                   errorWidget: (_, __, ___) => const SizedBox.shrink(),
                 ),
-                isPast: isPast,
               ),
 
             Padding(
@@ -377,7 +380,21 @@ class _TripCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (isAdmin)
+                      if (isAdmin) ...[
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  _AddTripPage(docId: docId, initial: data),
+                            ),
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.only(right: 4, left: 4),
+                            child: Icon(Icons.edit_outlined,
+                                color: _navy, size: 19),
+                          ),
+                        ),
                         GestureDetector(
                           onTap: () => _delete(context),
                           child: const Padding(
@@ -386,6 +403,7 @@ class _TripCard extends StatelessWidget {
                                 color: Colors.red, size: 20),
                           ),
                         ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -534,30 +552,38 @@ class _InfoChip extends StatelessWidget {
 }
 
 // Wraps a trip image and overlays an "انتهت" (ended) badge for past trips.
+// Tapping the image opens it full-screen.
 class _TripImage extends StatelessWidget {
   final Widget child;
   final bool isPast;
-  const _TripImage({required this.child, required this.isPast});
+  final ImageProvider? fullImage;
+  const _TripImage(
+      {required this.child, required this.isPast, this.fullImage});
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        child,
-        if (isPast)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.35),
-              child: const Center(
-                child: Text('انتهت',
-                    style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold)),
+    return GestureDetector(
+      onTap: fullImage == null
+          ? null
+          : () => openPhotoView(context, fullImage!),
+      child: Stack(
+        children: [
+          child,
+          if (isPast)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.35),
+                child: const Center(
+                  child: Text('انتهت',
+                      style: TextStyle(
+                          color: Colors.white60,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold)),
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -565,7 +591,11 @@ class _TripImage extends StatelessWidget {
 // ─── Add Trip (admin) ──────────────────────────────────────────────────────────
 
 class _AddTripPage extends StatefulWidget {
-  const _AddTripPage();
+  // When [docId] is set the page edits that existing trip instead of creating
+  // a new one; [initial] holds its current field values to prefill the form.
+  final String? docId;
+  final Map<String, dynamic>? initial;
+  const _AddTripPage({this.docId, this.initial});
 
   @override
   State<_AddTripPage> createState() => _AddTripPageState();
@@ -582,6 +612,24 @@ class _AddTripPageState extends State<_AddTripPage> {
   bool _boosted = false;
   Uint8List? _imageBytes;
   bool _uploading = false;
+
+  bool get _isEdit => widget.docId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.initial;
+    if (d != null) {
+      _title.text = d['title'] as String? ?? '';
+      _description.text = d['description'] as String? ?? '';
+      _destination.text = d['destination'] as String? ?? '';
+      _cost.text = d['cost'] as String? ?? '';
+      _contact.text = d['contact'] as String? ?? '';
+      _boosted = (d['boosted'] as bool?) ?? false;
+      final ts = d['date'];
+      if (ts is Timestamp) _date = ts.toDate();
+    }
+  }
 
   @override
   void dispose() {
@@ -633,11 +681,21 @@ class _AddTripPageState extends State<_AddTripPage> {
     setState(() => _uploading = true);
 
     try {
-      // Prefer hosted image (Hostinger); fall back to base64-in-Firestore.
-      String imageUrl = '';
-      String imageBase64 = '';
+      final data = <String, dynamic>{
+        'title': _title.text.trim(),
+        'description': _description.text.trim(),
+        'destination': _destination.text.trim(),
+        'cost': _cost.text.trim(),
+        'contact': _contact.text.trim(),
+        'boosted': _boosted,
+        'date': Timestamp.fromDate(_date!),
+      };
+
+      // Only touch image fields when a new image was chosen — an edit keeps the
+      // existing image otherwise. Prefer hosted (Hostinger), fall back to base64.
       if (_imageBytes != null) {
-        imageUrl = await Backend.uploadImage(_imageBytes!) ?? '';
+        String imageUrl = await Backend.uploadImage(_imageBytes!) ?? '';
+        String imageBase64 = '';
         if (imageUrl.isEmpty) {
           final encoded = base64Encode(_imageBytes!);
           if (encoded.length <= 700000) {
@@ -649,35 +707,33 @@ class _AddTripPageState extends State<_AddTripPage> {
             ));
           }
         }
+        data['imageUrl'] = imageUrl;
+        data['imageBase64'] = imageBase64;
       }
 
-      await FirebaseFirestore.instance.collection('trips').add({
-        'title': _title.text.trim(),
-        'description': _description.text.trim(),
-        'destination': _destination.text.trim(),
-        'cost': _cost.text.trim(),
-        'contact': _contact.text.trim(),
-        'imageUrl': imageUrl,
-        'imageBase64': imageBase64,
-        'boosted': _boosted,
-        'date': Timestamp.fromDate(_date!),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Push a notification to all app users about the new trip.
-      await Backend.notifyBroadcast(
-        title: 'رحلة جديدة 🚌',
-        body: _destination.text.trim().isNotEmpty
-            ? '${_title.text.trim()} — ${_destination.text.trim()}'
-            : _title.text.trim(),
-        page: 'trips',
-      );
-      Analytics.tripPosted();
+      final trips = FirebaseFirestore.instance.collection('trips');
+      if (_isEdit) {
+        await trips.doc(widget.docId).update(data);
+      } else {
+        data['imageUrl'] ??= '';
+        data['imageBase64'] ??= '';
+        data['createdAt'] = FieldValue.serverTimestamp();
+        await trips.add(data);
+        // Push a notification to all app users about the new trip.
+        await Backend.notifyBroadcast(
+          title: 'رحلة جديدة 🚌',
+          body: _destination.text.trim().isNotEmpty
+              ? '${_title.text.trim()} — ${_destination.text.trim()}'
+              : _title.text.trim(),
+          page: 'trips',
+        );
+        Analytics.tripPosted();
+      }
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('تم نشر الرحلة ✅'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_isEdit ? 'تم تعديل الرحلة ✅' : 'تم نشر الرحلة ✅'),
           behavior: SnackBarBehavior.floating,
         ));
       }
@@ -702,7 +758,7 @@ class _AddTripPageState extends State<_AddTripPage> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('رحلة جديدة'),
+          title: Text(_isEdit ? 'تعديل الرحلة' : 'رحلة جديدة'),
           actions: [
             TextButton(
               onPressed: _uploading ? null : _submit,
@@ -712,8 +768,8 @@ class _AddTripPageState extends State<_AddTripPage> {
                       height: 18,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
-                  : const Text('نشر',
-                      style: TextStyle(
+                  : Text(_isEdit ? 'حفظ' : 'نشر',
+                      style: const TextStyle(
                           color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
@@ -865,7 +921,9 @@ class _AddTripPageState extends State<_AddTripPage> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.send),
-                  label: Text(_uploading ? 'جارٍ النشر...' : 'نشر الرحلة'),
+                  label: Text(_uploading
+                      ? 'جارٍ الحفظ...'
+                      : (_isEdit ? 'حفظ التعديل' : 'نشر الرحلة')),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _navy,
                     foregroundColor: Colors.white,

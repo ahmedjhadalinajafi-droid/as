@@ -11,6 +11,7 @@ import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
 import 'notification_service.dart';
+import 'photo_viewer.dart';
 
 const _deviceAdminKey = 'ask_device_admin';
 const _adminSecret = 'MasjidAhlAlBait-Admin-Baghdad-Mansour-2026';
@@ -878,28 +879,34 @@ class _QAImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (url.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: CachedNetworkImage(
-          imageUrl: url,
-          width: double.infinity,
-          height: 180,
-          fit: BoxFit.cover,
-          placeholder: (_, __) => Container(
+      return GestureDetector(
+        onTap: () => openPhotoView(context, CachedNetworkImageProvider(url)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            width: double.infinity,
             height: 180,
-            color: Colors.black12,
-            child: const Center(child: CircularProgressIndicator()),
+            fit: BoxFit.cover,
+            placeholder: (_, __) => Container(
+              height: 180,
+              color: Colors.black12,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+            errorWidget: (_, __, ___) => const SizedBox.shrink(),
           ),
-          errorWidget: (_, __, ___) => const SizedBox.shrink(),
         ),
       );
     }
     try {
       final bytes = base64Decode(base64);
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.memory(bytes,
-            width: double.infinity, height: 180, fit: BoxFit.cover),
+      return GestureDetector(
+        onTap: () => openPhotoView(context, MemoryImage(bytes)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.memory(bytes,
+              width: double.infinity, height: 180, fit: BoxFit.cover),
+        ),
       );
     } catch (_) {
       return const SizedBox.shrink();

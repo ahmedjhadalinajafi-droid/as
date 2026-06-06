@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
+import 'photo_viewer.dart';
 
 // Admin email — only this account can add/delete announcements
 const _adminEmail = 'ahmedjhadalinajafi@gmail.com';
@@ -208,28 +209,37 @@ class _AnnouncementCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (imageBase64.isNotEmpty)
-            ClipRRect(
-              child: Image.memory(
-                base64Decode(imageBase64),
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            GestureDetector(
+              onTap: () => openPhotoView(
+                  context, MemoryImage(base64Decode(imageBase64))),
+              child: ClipRRect(
+                child: Image.memory(
+                  base64Decode(imageBase64),
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
               ),
             )
           else if (imageUrl.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              height: 200,
-              fit: BoxFit.cover,
-              placeholder: (_, __) => Container(
+            GestureDetector(
+              onTap: () =>
+                  openPhotoView(context, CachedNetworkImageProvider(imageUrl)),
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
                 height: 200,
-                color: cs.primary.withOpacity(0.1),
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (_, __, ___) => Container(
-                height: 60,
-                color: cs.primary.withOpacity(0.05),
+                width: double.infinity,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(
+                  height: 200,
+                  color: cs.primary.withOpacity(0.1),
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+                errorWidget: (_, __, ___) => Container(
+                  height: 60,
+                  color: cs.primary.withOpacity(0.05),
+                ),
               ),
             ),
           Padding(

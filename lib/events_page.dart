@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
+import 'photo_viewer.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -282,6 +283,8 @@ class _EventCard extends StatelessWidget {
             // Image — base64 (stored in Firestore) preferred, legacy URL fallback
             if (imageBase64.isNotEmpty)
               _EventImage(
+                fullImage: MemoryImage(base64Decode(imageBase64)),
+                isPast: isPast,
                 child: Image.memory(
                   base64Decode(imageBase64),
                   height: 180,
@@ -289,10 +292,11 @@ class _EventCard extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
-                isPast: isPast,
               )
             else if (imageUrl.isNotEmpty)
               _EventImage(
+                fullImage: CachedNetworkImageProvider(imageUrl),
+                isPast: isPast,
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   height: 180,
@@ -305,7 +309,6 @@ class _EventCard extends StatelessWidget {
                   ),
                   errorWidget: (_, __, ___) => const SizedBox.shrink(),
                 ),
-                isPast: isPast,
               ),
 
             Padding(
@@ -429,7 +432,21 @@ class _EventCard extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            if (isAdmin)
+                            if (isAdmin) ...[
+                              GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => _AddEventPage(
+                                        docId: docId, initial: data),
+                                  ),
+                                ),
+                                child: const Padding(
+                                  padding: EdgeInsets.only(right: 4, left: 4),
+                                  child: Icon(Icons.edit_outlined,
+                                      color: _navy, size: 19),
+                                ),
+                              ),
                               GestureDetector(
                                 onTap: () => _delete(context),
                                 child: const Padding(
@@ -438,6 +455,7 @@ class _EventCard extends StatelessWidget {
                                       color: Colors.red, size: 20),
                                 ),
                               ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -521,30 +539,38 @@ class _EventCard extends StatelessWidget {
 }
 
 // Wraps an event image and overlays an "انتهت" (ended) badge for past events.
+// Tapping the image opens it full-screen.
 class _EventImage extends StatelessWidget {
   final Widget child;
   final bool isPast;
-  const _EventImage({required this.child, required this.isPast});
+  final ImageProvider? fullImage;
+  const _EventImage(
+      {required this.child, required this.isPast, this.fullImage});
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        child,
-        if (isPast)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.35),
-              child: const Center(
-                child: Text('انتهت',
-                    style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold)),
+    return GestureDetector(
+      onTap: fullImage == null
+          ? null
+          : () => openPhotoView(context, fullImage!),
+      child: Stack(
+        children: [
+          child,
+          if (isPast)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.35),
+                child: const Center(
+                  child: Text('انتهت',
+                      style: TextStyle(
+                          color: Colors.white60,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold)),
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -552,7 +578,11 @@ class _EventImage extends StatelessWidget {
 // ─── Add Event (admin) ────────────────────────────────────────────────────────
 
 class _AddEventPage extends StatefulWidget {
-  const _AddEventPage();
+  // When [docId] is set the page edits that existing event instead of creating
+  // a new one; [initial] holds its current field values to prefill the form.
+  final String? docId;
+  final Map<String, dynamic>? initial;
+  const _AddEventPage({this.docId, this.initial});
 
   @override
   State<_AddEventPage> createState() => _AddEventPageState();
@@ -568,6 +598,24 @@ class _AddEventPageState extends State<_AddEventPage> {
   bool _boosted = false;
   Uint8List? _imageBytes;
   bool _uploading = false;
+
+  bool get _isEdit => widget.docId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.initial;
+    if (d != null) {
+      _title.text = d['title'] as String? ?? '';
+      _description.text = d['description'] as String? ?? '';
+      _location.text = d['location'] as String? ?? '';
+      final cat = d['category'] as String? ?? '';
+      if (_categories.any((c) => c.$1 == cat)) _category = cat;
+      _boosted = (d['boosted'] as bool?) ?? false;
+      final ts = d['date'];
+      if (ts is Timestamp) _date = ts.toDate();
+    }
+  }
 
   @override
   void dispose() {
@@ -617,11 +665,21 @@ class _AddEventPageState extends State<_AddEventPage> {
     setState(() => _uploading = true);
 
     try {
-      // Prefer hosted image (Hostinger); fall back to base64-in-Firestore.
-      String imageUrl = '';
-      String imageBase64 = '';
+      final data = <String, dynamic>{
+        'title': _title.text.trim(),
+        'description': _description.text.trim(),
+        'location': _location.text.trim(),
+        'category': _category,
+        'boosted': _boosted,
+        'date': Timestamp.fromDate(_date!),
+      };
+
+      // Only touch the image fields when a new image was chosen — otherwise an
+      // edit keeps the existing image. Prefer hosted (Hostinger), fall back to
+      // base64-in-Firestore.
       if (_imageBytes != null) {
-        imageUrl = await Backend.uploadImage(_imageBytes!) ?? '';
+        String imageUrl = await Backend.uploadImage(_imageBytes!) ?? '';
+        String imageBase64 = '';
         if (imageUrl.isEmpty) {
           final encoded = base64Encode(_imageBytes!);
           if (encoded.length <= 700000) {
@@ -633,32 +691,31 @@ class _AddEventPageState extends State<_AddEventPage> {
             ));
           }
         }
+        data['imageUrl'] = imageUrl;
+        data['imageBase64'] = imageBase64;
       }
 
-      await FirebaseFirestore.instance.collection('events').add({
-        'title': _title.text.trim(),
-        'description': _description.text.trim(),
-        'location': _location.text.trim(),
-        'category': _category,
-        'imageUrl': imageUrl,
-        'imageBase64': imageBase64,
-        'boosted': _boosted,
-        'date': Timestamp.fromDate(_date!),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Push a notification to all app users about the new event.
-      await Backend.notifyBroadcast(
-        title: 'فعالية جديدة 🗓️',
-        body: _title.text.trim(),
-        page: 'events',
-      );
-      Analytics.eventPosted();
+      final events = FirebaseFirestore.instance.collection('events');
+      if (_isEdit) {
+        await events.doc(widget.docId).update(data);
+      } else {
+        data['imageUrl'] ??= '';
+        data['imageBase64'] ??= '';
+        data['createdAt'] = FieldValue.serverTimestamp();
+        await events.add(data);
+        // Push a notification to all app users about the new event.
+        await Backend.notifyBroadcast(
+          title: 'فعالية جديدة 🗓️',
+          body: _title.text.trim(),
+          page: 'events',
+        );
+        Analytics.eventPosted();
+      }
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('تم نشر الفعالية ✅'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_isEdit ? 'تم تعديل الفعالية ✅' : 'تم نشر الفعالية ✅'),
           behavior: SnackBarBehavior.floating,
         ));
       }
@@ -683,7 +740,7 @@ class _AddEventPageState extends State<_AddEventPage> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('فعالية جديدة'),
+          title: Text(_isEdit ? 'تعديل الفعالية' : 'فعالية جديدة'),
           actions: [
             TextButton(
               onPressed: _uploading ? null : _submit,
@@ -693,8 +750,8 @@ class _AddEventPageState extends State<_AddEventPage> {
                       height: 18,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
-                  : const Text('نشر',
-                      style: TextStyle(
+                  : Text(_isEdit ? 'حفظ' : 'نشر',
+                      style: const TextStyle(
                           color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
@@ -847,7 +904,9 @@ class _AddEventPageState extends State<_AddEventPage> {
                           child:
                               CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.send),
-                  label: Text(_uploading ? 'جارٍ النشر...' : 'نشر الفعالية'),
+                  label: Text(_uploading
+                      ? 'جارٍ الحفظ...'
+                      : (_isEdit ? 'حفظ التعديل' : 'نشر الفعالية')),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _navy,
                     foregroundColor: Colors.white,
