@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
 
@@ -219,6 +220,7 @@ class _TripCard extends StatelessWidget {
   Future<void> _book(String contact) async {
     final digits = contact.replaceAll(RegExp(r'[^0-9+]'), '');
     if (digits.isEmpty) return;
+    Analytics.tripBooked(data['destination'] as String? ?? '');
     // Prefer WhatsApp, fall back to a normal phone dial.
     final wa = Uri.parse('https://wa.me/${digits.replaceAll('+', '')}');
     if (await canLaunchUrl(wa)) {
@@ -670,6 +672,7 @@ class _AddTripPageState extends State<_AddTripPage> {
             : _title.text.trim(),
         page: 'trips',
       );
+      Analytics.tripPosted();
 
       if (mounted) {
         Navigator.pop(context);

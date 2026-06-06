@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
 import 'notification_service.dart';
@@ -182,6 +183,7 @@ class _AskPageState extends State<AskPage> {
           ? '${questionText.substring(0, 80)}...'
           : questionText;
       await Backend.notifyNewQuestion(preview);
+      Analytics.questionAsked();
 
       final prefs = await SharedPreferences.getInstance();
       final ids = prefs.getStringList('my_questions') ?? [];

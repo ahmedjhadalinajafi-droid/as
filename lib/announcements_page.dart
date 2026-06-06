@@ -9,6 +9,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
 
@@ -385,6 +386,7 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
             : 'تم نشر إعلان جديد، افتح التطبيق',
         page: 'announcements',
       );
+      Analytics.announcementPosted();
 
       if (mounted) Navigator.pop(context);
     } catch (e) {

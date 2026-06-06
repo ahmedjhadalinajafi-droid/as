@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'analytics_service.dart';
 import 'announcements_page.dart';
 import 'ask_page.dart';
 import 'backend_config.dart';
@@ -121,6 +122,14 @@ Future<void> main() async {
     debugPrint('NotificationService init failed: $e');
   }
 
+  // Google Analytics for Firebase — enable collection and log app open.
+  try {
+    Analytics.init();
+    Analytics.appOpened();
+  } catch (e) {
+    debugPrint('Analytics init failed: $e');
+  }
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(),
@@ -150,6 +159,7 @@ class MasjidApp extends StatelessWidget {
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
       themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
+      navigatorObservers: [Analytics.observer],
       home: const MainShell(),
     );
   }
