@@ -137,14 +137,17 @@ class _AskPageState extends State<AskPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text('جارٍ إرسال السؤال...'),
-      duration: Duration(seconds: 60),
+      duration: Duration(seconds: 3),
       behavior: SnackBarBehavior.floating,
     ));
 
     try {
       String clientToken = '';
       try {
-        clientToken = await FirebaseMessaging.instance.getToken() ?? '';
+        clientToken = await FirebaseMessaging.instance
+                .getToken()
+                .timeout(const Duration(seconds: 5)) ??
+            '';
       } catch (_) {}
 
       // Prefer hosted image (Hostinger); fall back to base64-in-Firestore.
@@ -166,7 +169,11 @@ class _AskPageState extends State<AskPage> {
       }
 
       final docRef = FirebaseFirestore.instance.collection('questions').doc();
-      await docRef.set({
+      // NOTE: do NOT await set() — Firestore writes to the local cache
+      // immediately and syncs to the server in the background. Awaiting it
+      // would hang the UI (and the "sending" message) whenever the network is
+      // slow or offline.
+      docRef.set({
         'question': questionText,
         'name': result['name'] as String? ?? '',
         'answer': '',
@@ -178,12 +185,12 @@ class _AskPageState extends State<AskPage> {
         'clientFcmToken': clientToken,
       });
 
-      // Push "new question" to admin devices via the Hostinger server (works
-      // even when the admin app is closed).
+      // Push "new question" to admin devices — fire-and-forget so a slow
+      // server never blocks the UI.
       final preview = questionText.length > 80
           ? '${questionText.substring(0, 80)}...'
           : questionText;
-      await Backend.notifyNewQuestion(preview);
+      Backend.notifyNewQuestion(preview);
       Analytics.questionAsked();
 
       final prefs = await SharedPreferences.getInstance();
@@ -573,10 +580,9 @@ class _QACard extends StatelessWidget {
         } catch (_) {}
       }
 
-      await FirebaseFirestore.instance
-          .collection('questions')
-          .doc(docId)
-          .update({
+      // Don't await — Firestore caches locally and syncs in the background so
+      // the UI never hangs on a slow/offline connection.
+      FirebaseFirestore.instance.collection('questions').doc(docId).update({
         'answer': answerText,
         'answerImageUrl': answerImageUrl,
         'answerImageBase64': answerImageBase64,
@@ -584,12 +590,19 @@ class _QACard extends StatelessWidget {
         'answeredAt': FieldValue.serverTimestamp(),
       });
 
-      // Push "answered" to the client who asked (works when app is closed).
+      // Push "answered" to the client who asked — fire-and-forget.
       final clientToken = data['clientFcmToken'] as String? ?? '';
       final preview = answerText.length > 80
           ? '${answerText.substring(0, 80)}...'
           : answerText;
-      await Backend.notifyAnswer(clientToken, preview);
+      Backend.notifyAnswer(clientToken, preview);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('تم نشر الجواب ✅'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
