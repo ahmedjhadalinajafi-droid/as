@@ -6,6 +6,40 @@ import 'islamic_background.dart';
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
 
+// True if a text segment is "recited" dua/ziyara (heavily voweled) rather than
+// plain narration/description (little or no tashkeel).
+bool _isRecited(String s) {
+  int diacritics = 0;
+  int letters = 0;
+  for (final r in s.runes) {
+    if ((r >= 0x064B && r <= 0x0658) || r == 0x0670 || r == 0x0640) {
+      diacritics++;
+    } else if ((r >= 0x0621 && r <= 0x064A) || (r >= 0x0671 && r <= 0x06D3)) {
+      letters++;
+    }
+  }
+  if (letters < 4) return false;
+  return diacritics / letters > 0.12;
+}
+
+// Splits a chapter's content into styled spans: the recited dua text is shown
+// bold/full-size, the descriptive narration lighter and slightly smaller.
+List<TextSpan> _mafatihSpans(
+    String content, TextStyle duaStyle, TextStyle descStyle) {
+  // Split into sentences, keeping the text after each full stop together.
+  final parts = content.split(RegExp(r'(?<=[.؟!])\s+'));
+  final spans = <TextSpan>[];
+  for (final p in parts) {
+    if (p.trim().isEmpty) continue;
+    final recited = _isRecited(p);
+    spans.add(TextSpan(
+      text: '$p ',
+      style: recited ? duaStyle : descStyle,
+    ));
+  }
+  return spans;
+}
+
 // Opens the Mafatih reader at the first chapter whose title contains [titleContains].
 // Used by the home page day-of-week worship shortcuts.
 Future<void> openMafatihChapter(
@@ -816,20 +850,33 @@ class _ReaderPageState extends State<_ReaderPage> {
                             ),
                             const SizedBox(height: 22),
 
-                            // Content — justified, generous spacing, readable weight
-                            SelectableText(
-                              ch.content,
+                            // Content — recited dua shown bold, narration light
+                            SelectableText.rich(
+                              TextSpan(
+                                style: TextStyle(
+                                  fontFamily: 'ScheherazadeNew',
+                                  height: 2.1,
+                                ),
+                                children: _mafatihSpans(
+                                  ch.content,
+                                  // Dua: bold, full size, strong color
+                                  TextStyle(
+                                    fontSize: _fontSize,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? const Color(0xFFF6F1E6)
+                                        : const Color(0xFF12203A),
+                                  ),
+                                  // Description: lighter, smaller, softer color
+                                  TextStyle(
+                                    fontSize: _fontSize - 2,
+                                    fontWeight: FontWeight.w400,
+                                    color: cs.onSurface.withOpacity(0.6),
+                                  ),
+                                ),
+                              ),
                               textDirection: TextDirection.rtl,
                               textAlign: TextAlign.justify,
-                              style: TextStyle(
-                                fontFamily: 'ScheherazadeNew',
-                                fontSize: _fontSize,
-                                height: 2.1,
-                                fontWeight: FontWeight.w500,
-                                color: isDark
-                                    ? const Color(0xFFF1ECE0)
-                                    : const Color(0xFF15233B),
-                              ),
                             ),
                           ],
                         ),
