@@ -18,13 +18,39 @@ const _gold = Color(0xFFC9A843);
 // Same secret-key admin flag used by the events and Q&A pages.
 const _deviceAdminKey = 'ask_device_admin';
 
-// Splits a stored contact string (numbers separated by , ، ; or newlines)
-// into a clean list of individual numbers.
-List<String> _parseContacts(String raw) => raw
-    .split(RegExp(r'[,\n;،]'))
-    .map((s) => s.trim())
-    .where((s) => s.isNotEmpty)
-    .toList();
+// A booking contact: a phone number with an optional holder name.
+class TripContact {
+  final String name;
+  final String number;
+  const TripContact(this.name, this.number);
+}
+
+// Parses the stored contact string into a list of (name, number) entries.
+// Format: entries separated by newline (or comma for old data), each entry
+// optionally "name|number". Entries without "|" are treated as number-only.
+List<TripContact> _parseContacts(String raw) {
+  final out = <TripContact>[];
+  for (var entry in raw.split(RegExp(r'[\n,،;]'))) {
+    entry = entry.trim();
+    if (entry.isEmpty) continue;
+    String name = '';
+    String number = entry;
+    if (entry.contains('|')) {
+      final parts = entry.split('|');
+      name = parts.first.trim();
+      number = parts.sublist(1).join('|').trim();
+    }
+    if (number.isEmpty) continue;
+    out.add(TripContact(name, number));
+  }
+  return out;
+}
+
+// Label for a booking button: prefer the holder's name when present.
+String _bookLabel(TripContact c, int total) {
+  if (c.name.isNotEmpty) return 'احجز مع ${c.name}';
+  return total == 1 ? 'احجز الآن' : 'احجز: ${c.number}';
+}
 
 // ─── Trips Page ────────────────────────────────────────────────────────────────
 
@@ -490,7 +516,7 @@ class _TripCard extends StatelessWidget {
                     ],
                   ),
 
-                  // Booking buttons — one per contact number
+                  // Booking buttons — one per contact (name + number)
                   if (!isPast && contacts.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     for (int i = 0; i < contacts.length; i++) ...[
@@ -498,11 +524,9 @@ class _TripCard extends StatelessWidget {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: () => _book(contacts[i]),
+                          onPressed: () => _book(contacts[i].number),
                           icon: const Icon(Icons.chat, size: 18),
-                          label: Text(contacts.length == 1
-                              ? 'احجز الآن'
-                              : 'احجز: ${contacts[i]}'),
+                          label: Text(_bookLabel(contacts[i], contacts.length)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1B7A4B),
                             foregroundColor: Colors.white,
@@ -620,8 +644,11 @@ class _AddTripPageState extends State<_AddTripPage> {
   final _description = TextEditingController();
   final _destination = TextEditingController();
   final _cost = TextEditingController();
-  // One controller per booking number; starts with a single empty field.
-  final List<TextEditingController> _contacts = [TextEditingController()];
+  // One row per booking contact: a holder name + a phone number.
+  final List<({TextEditingController name, TextEditingController number})>
+      _contacts = [
+    (name: TextEditingController(), number: TextEditingController())
+  ];
   DateTime? _date;
   bool _boosted = false;
   Uint8List? _imageBytes;
@@ -642,7 +669,10 @@ class _AddTripPageState extends State<_AddTripPage> {
       if (existing.isNotEmpty) {
         _contacts
           ..clear()
-          ..addAll(existing.map((c) => TextEditingController(text: c)));
+          ..addAll(existing.map((c) => (
+                name: TextEditingController(text: c.name),
+                number: TextEditingController(text: c.number),
+              )));
       }
       _boosted = (d['boosted'] as bool?) ?? false;
       final ts = d['date'];
@@ -651,14 +681,19 @@ class _AddTripPageState extends State<_AddTripPage> {
   }
 
   void _addContactField() {
-    setState(() => _contacts.add(TextEditingController()));
+    setState(() => _contacts.add(
+        (name: TextEditingController(), number: TextEditingController())));
   }
 
   void _removeContactField(int i) {
     setState(() {
-      _contacts[i].dispose();
+      _contacts[i].name.dispose();
+      _contacts[i].number.dispose();
       _contacts.removeAt(i);
-      if (_contacts.isEmpty) _contacts.add(TextEditingController());
+      if (_contacts.isEmpty) {
+        _contacts.add(
+            (name: TextEditingController(), number: TextEditingController()));
+      }
     });
   }
 
@@ -669,7 +704,8 @@ class _AddTripPageState extends State<_AddTripPage> {
     _destination.dispose();
     _cost.dispose();
     for (final c in _contacts) {
-      c.dispose();
+      c.name.dispose();
+      c.number.dispose();
     }
     super.dispose();
   }
@@ -714,11 +750,17 @@ class _AddTripPageState extends State<_AddTripPage> {
     setState(() => _uploading = true);
 
     try {
-      // Join all non-empty numbers with a comma; the card splits them back.
+      // Encode each contact as "name|number" (or just "number" when unnamed),
+      // one per line; the card parses them back.
       final contactsJoined = _contacts
-          .map((c) => c.text.trim())
+          .map((c) {
+            final num = c.number.text.trim();
+            if (num.isEmpty) return '';
+            final nm = c.name.text.trim();
+            return nm.isEmpty ? num : '$nm|$num';
+          })
           .where((s) => s.isNotEmpty)
-          .join(', ');
+          .join('\n');
 
       final data = <String, dynamic>{
         'title': _title.text.trim(),
@@ -914,7 +956,7 @@ class _AddTripPageState extends State<_AddTripPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // Contact / booking numbers — supports more than one
+                // Contact / booking numbers — name + number, supports more than one
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text('أرقام الحجز / واتساب (اختياري)',
@@ -926,16 +968,36 @@ class _AddTripPageState extends State<_AddTripPage> {
                 const SizedBox(height: 6),
                 for (int i = 0; i < _contacts.length; i++)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.only(bottom: 10),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Holder name
                         Expanded(
+                          flex: 4,
                           child: TextFormField(
-                            controller: _contacts[i],
+                            controller: _contacts[i].name,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              prefixIcon: const Icon(Icons.person_outline,
+                                  color: _gold, size: 20),
+                              hintText: 'الاسم',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // Phone number
+                        Expanded(
+                          flex: 6,
+                          child: TextFormField(
+                            controller: _contacts[i].number,
                             keyboardType: TextInputType.phone,
                             decoration: InputDecoration(
+                              isDense: true,
                               prefixIcon: const Icon(Icons.chat,
-                                  color: Color(0xFF1B7A4B)),
+                                  color: Color(0xFF1B7A4B), size: 20),
                               hintText: '+9647xxxxxxxxx',
                               border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12)),
@@ -947,7 +1009,7 @@ class _AddTripPageState extends State<_AddTripPage> {
                             onPressed: () => _removeContactField(i),
                             icon: const Icon(Icons.remove_circle_outline,
                                 color: Colors.red),
-                            tooltip: 'حذف الرقم',
+                            tooltip: 'حذف',
                           ),
                       ],
                     ),

@@ -254,6 +254,18 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $flash = fs_flash($res, 'تم تعديل الرحلة');
     }
 
+    if ($action === 'edit_announcement') {
+        $fields = [
+            'title'   => trim($_POST['title'] ?? ''),
+            'body'    => trim($_POST['body'] ?? ''),
+            'linkUrl' => trim($_POST['link'] ?? ''),
+        ];
+        $img = admin_save_image('image');
+        if ($img !== '') $fields['imageUrl'] = $img;
+        $res = fs_update('announcements', $_POST['id'], $fields);
+        $flash = fs_flash($res, 'تم تعديل الإعلان');
+    }
+
     if ($action === 'edit_question') {
         $res = fs_update('questions', $_POST['id'],
             ['question' => trim($_POST['question'] ?? '')]);
@@ -439,7 +451,8 @@ $tab = $_GET['tab'] ?? 'events';
         <label>موعد الانطلاق</label>
         <input type="datetime-local" name="date" required value="<?= h(dt_local($ed['date'] ?? '')) ?>">
         <label>التكلفة (مثال: 25 ألف دينار)</label><input name="cost" value="<?= h($ed['cost'] ?? '') ?>">
-        <label>أرقام الحجز / واتساب (افصل بين الأرقام بفاصلة)</label><input name="contact" placeholder="+9647xxxxxxxxx، +9647yyyyyyyyy" value="<?= h($ed['contact'] ?? '') ?>">
+        <label>أرقام الحجز / واتساب — كل جهة في سطر بصيغة: الاسم | الرقم</label>
+        <textarea name="contact" rows="3" placeholder="أبو علي | +9647xxxxxxxxx&#10;الحاج حسن | +9647yyyyyyyyy"><?= h($ed['contact'] ?? '') ?></textarea>
         <label>تفاصيل الرحلة</label><textarea name="description" rows="3"><?= h($ed['description'] ?? '') ?></textarea>
         <label>صورة <?= $isEdit ? '(اتركها فارغة للإبقاء على الصورة الحالية)' : '' ?></label>
         <input type="file" name="image" accept="image/*">
@@ -531,32 +544,45 @@ $tab = $_GET['tab'] ?? 'events';
       </form>
     </div>
 
-  <?php elseif ($tab === 'announcements'): ?>
-    <div class="card">
-      <h3 style="margin-top:0">➕ إعلان جديد</h3>
-      <form method="post" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="add_announcement">
-        <label>العنوان</label><input name="title" required>
-        <label>النص</label><textarea name="body" rows="4"></textarea>
-        <label>رابط يوتيوب (اختياري)</label><input name="link" placeholder="https://youtube.com/...">
-        <label>صورة</label><input type="file" name="image" accept="image/*">
-        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br><br>
-        <button>نشر الإعلان</button>
-      </form>
-    </div>
-    <?php
+  <?php elseif ($tab === 'announcements'):
       $ann = fs_list('announcements');
       usort($ann, fn($a,$b) => ($b['createdAt']??'') <=> ($a['createdAt']??''));
-      foreach ($ann as $a): ?>
+      $ed = null;
+      if (!empty($_GET['edit'])) {
+          foreach ($ann as $a) if (($a['_id'] ?? '') === $_GET['edit']) { $ed = $a; break; }
+      }
+      $isEdit = $ed !== null; ?>
+    <div class="card">
+      <h3 style="margin-top:0"><?= $isEdit ? '✏️ تعديل الإعلان' : '➕ إعلان جديد' ?></h3>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="<?= $isEdit ? 'edit_announcement' : 'add_announcement' ?>">
+        <?php if ($isEdit): ?><input type="hidden" name="id" value="<?= h($ed['_id']) ?>"><?php endif; ?>
+        <label>العنوان</label><input name="title" required value="<?= h($ed['title'] ?? '') ?>">
+        <label>النص</label><textarea name="body" rows="4"><?= h($ed['body'] ?? '') ?></textarea>
+        <label>رابط يوتيوب (اختياري)</label><input name="link" placeholder="https://youtube.com/..." value="<?= h($ed['linkUrl'] ?? '') ?>">
+        <label>صورة <?= $isEdit ? '(اتركها فارغة للإبقاء على الصورة الحالية)' : '' ?></label>
+        <input type="file" name="image" accept="image/*">
+        <?php if (!$isEdit): ?>
+        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br>
+        <?php endif; ?>
+        <br>
+        <button><?= $isEdit ? 'حفظ التعديل' : 'نشر الإعلان' ?></button>
+        <?php if ($isEdit): ?><a href="?tab=announcements" class="cancel">إلغاء</a><?php endif; ?>
+      </form>
+    </div>
+    <?php foreach ($ann as $a): ?>
       <div class="card">
         <?php if (!empty($a['imageUrl'])): ?><img src="<?= h($a['imageUrl']) ?>"><?php endif; ?>
         <div class="row">
           <strong><?= h($a['title'] ?? '') ?></strong>
-          <form method="post" onsubmit="return confirm('حذف؟')">
-            <input type="hidden" name="action" value="delete_announcement">
-            <input type="hidden" name="id" value="<?= h($a['_id']) ?>">
-            <button class="danger">حذف</button>
-          </form>
+          <div class="actions">
+            <a class="editbtn" href="?tab=announcements&edit=<?= h($a['_id']) ?>">تعديل</a>
+            <form method="post" onsubmit="return confirm('حذف؟')">
+              <input type="hidden" name="action" value="delete_announcement">
+              <input type="hidden" name="id" value="<?= h($a['_id']) ?>">
+              <button class="danger">حذف</button>
+            </form>
+          </div>
         </div>
         <?php if (!empty($a['body'])): ?><p><?= h($a['body']) ?></p><?php endif; ?>
       </div>
