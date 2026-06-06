@@ -138,31 +138,22 @@ class _TripList extends StatelessWidget {
   final bool isAdmin;
   const _TripList({required this.upcoming, required this.isAdmin});
 
-  Stream<QuerySnapshot>? _buildStream() {
-    try {
-      final now = Timestamp.now();
-      Query query = FirebaseFirestore.instance
-          .collection('trips')
-          .orderBy('date', descending: !upcoming);
-      if (upcoming) {
-        query = query.where('date', isGreaterThanOrEqualTo: now);
-      } else {
-        query = query.where('date', isLessThan: now);
-      }
-      return query.snapshots();
-    } catch (_) {
-      return null;
-    }
+  // Reads the trip date whether it's stored as a Firestore Timestamp (app) or
+  // an ISO string (web admin panel). Returns null if there's no usable date.
+  static DateTime? _tripDate(Map<String, dynamic> data) {
+    final v = data['date'];
+    if (v is Timestamp) return v.toDate();
+    if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toLocal();
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final stream = _buildStream();
 
-    if (stream == null) {
-      return _FirebaseErrorView(cs: cs);
-    }
+    // Load ALL trips, then split upcoming/past in Dart. This avoids any
+    // date-type / index mismatch between app-created and panel-created trips.
+    final stream = FirebaseFirestore.instance.collection('trips').snapshots();
 
     return StreamBuilder<QuerySnapshot>(
       stream: stream,
@@ -170,7 +161,15 @@ class _TripList extends StatelessWidget {
         if (snap.hasError) {
           return _FirebaseErrorView(cs: cs);
         }
-        final docs = snap.data?.docs ?? [];
+        final now = DateTime.now();
+        final all = snap.data?.docs ?? [];
+
+        // Keep only the trips for this tab (undated trips count as upcoming).
+        final docs = all.where((d) {
+          final date = _tripDate(d.data() as Map<String, dynamic>);
+          if (date == null) return upcoming;
+          return upcoming ? !date.isBefore(now) : date.isBefore(now);
+        }).toList();
 
         if (docs.isEmpty) {
           return Center(
@@ -190,9 +189,15 @@ class _TripList extends StatelessWidget {
           );
         }
 
-        // Boosted (مميز) trips pinned to the top of the list.
-        final sorted = [...docs];
-        sorted.sort((a, b) {
+        // Sort by date (upcoming: soonest first, past: most recent first),
+        // then pin boosted (مميز) trips to the top.
+        docs.sort((a, b) {
+          final ad = _tripDate(a.data() as Map<String, dynamic>);
+          final bd = _tripDate(b.data() as Map<String, dynamic>);
+          if (ad == null || bd == null) return 0;
+          return upcoming ? ad.compareTo(bd) : bd.compareTo(ad);
+        });
+        docs.sort((a, b) {
           final aB = ((a.data() as Map)['boosted'] as bool?) ?? false;
           final bB = ((b.data() as Map)['boosted'] as bool?) ?? false;
           if (aB == bB) return 0;
@@ -201,12 +206,12 @@ class _TripList extends StatelessWidget {
 
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-          itemCount: sorted.length,
+          itemCount: docs.length,
           itemBuilder: (ctx, i) {
-            final data = sorted[i].data() as Map<String, dynamic>;
+            final data = docs[i].data() as Map<String, dynamic>;
             return _TripCard(
               data: data,
-              docId: sorted[i].id,
+              docId: docs[i].id,
               isPast: !upcoming,
               isAdmin: isAdmin,
             );
@@ -280,8 +285,7 @@ class _TripCard extends StatelessWidget {
     final contacts    = _parseContacts(data['contact'] as String? ?? '');
     final imageBase64 = data['imageBase64'] as String? ?? '';
     final imageUrl    = data['imageUrl']    as String? ?? '';
-    final ts          = data['date']        as Timestamp?;
-    final date        = ts?.toDate();
+    final date        = _TripList._tripDate(data);
     final boosted     = (data['boosted']    as bool?) ?? false;
 
     return Container(
@@ -675,8 +679,7 @@ class _AddTripPageState extends State<_AddTripPage> {
               )));
       }
       _boosted = (d['boosted'] as bool?) ?? false;
-      final ts = d['date'];
-      if (ts is Timestamp) _date = ts.toDate();
+      _date = _TripList._tripDate(d);
     }
   }
 
