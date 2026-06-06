@@ -7,10 +7,10 @@
 // A shared secret the app sends with every request. Pick any long random
 // string and put the SAME value in the Flutter app (lib/backend_config.dart →
 // kBackendSecret). This stops strangers from abusing your endpoints.
-const API_SECRET = 'CHANGE-ME-to-a-long-random-string-1a2b3c4d5e6f';
+const API_SECRET = 'ahlulbayt-masjid-2026-Kx9mPq7Lz3Wn8Rv';
 
-// Password for the web admin panel (server/admin/).
-const ADMIN_PASSWORD = 'CHANGE-ME-admin-password';
+// Password for the web admin panel (server/admin/). Change this to your own.
+const ADMIN_PASSWORD = 'Masjid@Admin2026';
 
 // Path to your Firebase service-account JSON (see README step 1).
 // Keep it OUTSIDE public_html if you can; otherwise the .htaccess here blocks
@@ -31,7 +31,7 @@ const ADMIN_TOPIC = 'admin_questions';
 const UPLOAD_DIR = __DIR__ . '/uploads';
 // Public base URL of the uploads folder. Set this to match your domain, e.g.
 // 'https://yoursite.com/uploads'. Leave as null to auto-detect.
-const UPLOAD_BASE_URL = null;
+const UPLOAD_BASE_URL = 'https://ahlulbaytmosque.site/app/uploads';
 
 // Max upload size in bytes (5 MB).
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;

@@ -15,10 +15,10 @@ class Backend {
   // upload_image.php and version.json. Example:
   //   'https://yoursite.com'         (if you uploaded into public_html)
   //   'https://yoursite.com/app'     (if you uploaded into public_html/app)
-  static const String baseUrl = 'https://YOUR-DOMAIN';
+  static const String baseUrl = 'https://ahlulbaytmosque.site/app';
 
   // Must match API_SECRET in server/config.php
-  static const String secret = 'CHANGE-ME-to-a-long-random-string-1a2b3c4d5e6f';
+  static const String secret = 'ahlulbayt-masjid-2026-Kx9mPq7Lz3Wn8Rv';
   // ─────────────────────────────────────────────────────────────────────────
 
   static bool get isConfigured => !baseUrl.contains('YOUR-DOMAIN');
