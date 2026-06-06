@@ -41,11 +41,33 @@ function admin_save_image(string $field): string {
     if (!move_uploaded_file($_FILES[$field]['tmp_name'], UPLOAD_DIR . '/' . $name)) {
         return '';
     }
+    return upload_public_url($name);
+}
+
+// Builds the public URL for a file saved in the uploads/ folder.
+function upload_public_url(string $name): string {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
     // admin/ is one level below the server root that holds uploads/
     $dir    = rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'])), '/');
     return "$scheme://$host$dir/uploads/$name";
+}
+
+// Saves an uploaded Quran recitation (mp3/m4a/ogg/wav/aac), returns URL or ''.
+function admin_save_audio(string $field): string {
+    if (empty($_FILES[$field]) || $_FILES[$field]['error'] !== UPLOAD_ERR_OK) {
+        return '';
+    }
+    $size = (int)($_FILES[$field]['size'] ?? 0);
+    if ($size <= 0 || $size > 50 * 1024 * 1024) return ''; // 50 MB cap
+    $ext = strtolower(pathinfo($_FILES[$field]['name'] ?? '', PATHINFO_EXTENSION));
+    if (!in_array($ext, ['mp3', 'm4a', 'ogg', 'wav', 'aac'], true)) return '';
+    if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0755, true);
+    $name = 'quran_' . bin2hex(random_bytes(8)) . '.' . $ext;
+    if (!move_uploaded_file($_FILES[$field]['tmp_name'], UPLOAD_DIR . '/' . $name)) {
+        return '';
+    }
+    return upload_public_url($name);
 }
 
 // Sends a broadcast push to all app users. Never throws — push failures
@@ -237,6 +259,27 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
             ['question' => trim($_POST['question'] ?? '')]);
         $flash = fs_flash($res, 'تم تعديل نص السؤال');
     }
+
+    if ($action === 'set_quran_audio') {
+        $num = (int)($_POST['surah'] ?? 0);
+        if ($num < 1 || $num > 114) {
+            $flash = '❌ رقم السورة يجب أن يكون بين 1 و 114';
+        } else {
+            $audio = admin_save_audio('audio');
+            if ($audio === '') {
+                $flash = '❌ تعذّر رفع الملف الصوتي (الصيغة mp3 والحجم أقل من 50 ميجا)';
+            } else {
+                $res = fs_update('quran_audio', (string)$num,
+                    ['url' => $audio, 'updatedAt' => new DateTime()]);
+                $flash = fs_flash($res, "تم رفع تلاوة سورة رقم $num");
+            }
+        }
+    }
+
+    if ($action === 'delete_quran_audio') {
+        fs_delete('quran_audio', (string)(int)($_POST['surah'] ?? 0));
+        $flash = 'تم حذف التلاوة';
+    }
 }
 
 function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
@@ -317,6 +360,7 @@ $tab = $_GET['tab'] ?? 'events';
     <a href="?tab=trips" class="<?= $tab==='trips'?'active':'' ?>">الرحلات</a>
     <a href="?tab=announcements" class="<?= $tab==='announcements'?'active':'' ?>">الإعلانات</a>
     <a href="?tab=questions" class="<?= $tab==='questions'?'active':'' ?>">الأسئلة</a>
+    <a href="?tab=quran" class="<?= $tab==='quran'?'active':'' ?>">القرآن</a>
     <a href="?tab=notify" class="<?= $tab==='notify'?'active':'' ?>">الإشعارات</a>
   </div>
   <?php if ($flash): ?><div class="flash"><?= h($flash) ?></div><?php endif; ?>
@@ -428,6 +472,40 @@ $tab = $_GET['tab'] ?? 'events';
           · <?= h($t['date'] ?? '') ?>
         </div>
         <?php if (!empty($t['description'])): ?><p><?= h($t['description']) ?></p><?php endif; ?>
+      </div>
+    <?php endforeach; ?>
+
+  <?php elseif ($tab === 'quran'): ?>
+    <div class="card">
+      <h3 style="margin-top:0">🎙️ رفع تلاوة لسورة</h3>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="set_quran_audio">
+        <label>رقم السورة (1 - 114)</label>
+        <input type="number" name="surah" min="1" max="114" required>
+        <label>ملف الصوت (mp3 — أقل من 50 ميجا)</label>
+        <input type="file" name="audio" accept="audio/*" required>
+        <button>رفع التلاوة</button>
+      </form>
+      <p class="muted">تظهر هذه التلاوة للمستخدمين بدل التلاوة الافتراضية لنفس
+        السورة. من رفع نفس الرقم مرة أخرى يستبدل التلاوة السابقة.</p>
+    </div>
+    <?php
+      $qa = fs_list('quran_audio');
+      usort($qa, fn($a,$b) => ((int)($a['_id']??0)) <=> ((int)($b['_id']??0)));
+      foreach ($qa as $a): ?>
+      <div class="card">
+        <div class="row">
+          <strong>سورة رقم <?= h($a['_id']) ?></strong>
+          <form method="post" onsubmit="return confirm('حذف التلاوة؟')">
+            <input type="hidden" name="action" value="delete_quran_audio">
+            <input type="hidden" name="surah" value="<?= h($a['_id']) ?>">
+            <button class="danger">حذف</button>
+          </form>
+        </div>
+        <?php if (!empty($a['url'])): ?>
+          <audio controls src="<?= h($a['url']) ?>"
+                 style="width:100%;margin-top:8px"></audio>
+        <?php endif; ?>
       </div>
     <?php endforeach; ?>
 

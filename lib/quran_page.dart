@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:audio_session/audio_session.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -98,6 +99,38 @@ class QuranAudioCache extends ChangeNotifier {
   // active download futures to prevent double-downloads
   final Map<int, Future<void>> _active = {};
 
+  // Admin-uploaded recitation URLs (surah id → mp3 url). When present for a
+  // surah, it overrides the default al-Afasy CDN.
+  final Map<int, String> _customUrls = {};
+
+  bool hasCustom(int id) => _customUrls.containsKey(id);
+
+  /// The remote audio URL for a surah: an admin upload if available, else the
+  /// free al-Afasy CDN.
+  String remoteUrl(int id) =>
+      _customUrls[id] ??
+      'https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/$id.mp3';
+
+  /// Loads admin-uploaded recitation URLs from Firestore (collection
+  /// `quran_audio`, doc id = surah number, field `url`). Safe offline.
+  Future<void> loadCustomUrls() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('quran_audio')
+          .get()
+          .timeout(const Duration(seconds: 6));
+      _customUrls.clear();
+      for (final doc in snap.docs) {
+        final id = int.tryParse(doc.id);
+        final url = (doc.data()['url'] as String?)?.trim() ?? '';
+        if (id != null && url.isNotEmpty) _customUrls[id] = url;
+      }
+      notifyListeners();
+    } catch (_) {
+      // offline or unavailable — keep whatever we have
+    }
+  }
+
   Future<void> init() async {
     final base = await getApplicationDocumentsDirectory();
     _dir = Directory('${base.path}/quran_audio');
@@ -152,8 +185,8 @@ class QuranAudioCache extends ChangeNotifier {
       _progress[id] = 0;
       notifyListeners();
 
-      // Free Quran audio CDN (Mishari Rashid al-Afasy)
-      final url = 'https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/$id.mp3';
+      // Admin-uploaded recitation if available, else the free al-Afasy CDN.
+      final url = remoteUrl(id);
       final request = http.Request('GET', Uri.parse(url));
       final response = await request.send();
       final total = response.contentLength ?? 0;
@@ -234,6 +267,8 @@ class _QuranPageState extends State<QuranPage> {
 
   Future<void> _init() async {
     await _cache.init();
+    // Pull any admin-uploaded recitations (non-blocking if offline).
+    _cache.loadCustomUrls();
     try {
       await _ensureLoaded();
       final surahs = _rawQuranData!
@@ -599,9 +634,7 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
     final id = _current.id;
     final localPath = QuranAudioCache.instance.localPath(id);
     if (localPath != null) return localPath;
-    final cached = _urlCache[id];
-    if (cached != null) return cached;
-    final url = 'https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/$id.mp3';
+    final url = QuranAudioCache.instance.remoteUrl(id);
     _urlCache[id] = url;
     return url;
   }
