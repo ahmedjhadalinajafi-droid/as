@@ -228,6 +228,39 @@ class QuranAudioCache extends ChangeNotifier {
     _cached.remove(id);
     notifyListeners();
   }
+
+  /// Number of surahs downloaded on the device.
+  int get downloadedCount => _cached.length;
+
+  /// Total bytes used by all downloaded recitations.
+  Future<int> totalBytes() async {
+    if (_dir == null) return 0;
+    int sum = 0;
+    try {
+      await for (final e in _dir!.list()) {
+        if (e is File && e.path.endsWith('.mp3')) sum += await e.length();
+      }
+    } catch (_) {}
+    return sum;
+  }
+
+  /// Deletes every downloaded recitation to free up storage.
+  Future<void> deleteAll() async {
+    if (_dir == null) return;
+    try {
+      await for (final e in _dir!.list()) {
+        if (e is File &&
+            (e.path.endsWith('.mp3') || e.path.endsWith('.json'))) {
+          try {
+            await e.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    _cached.clear();
+    _progress.clear();
+    notifyListeners();
+  }
 }
 
 // ─── Surah List Page ─────────────────────────────────────────────────────────
@@ -300,13 +333,71 @@ class _QuranPageState extends State<QuranPage> {
     });
   }
 
+  static String _fmtSize(int bytes) {
+    if (bytes < 1024) return '$bytes بايت';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} ك.ب';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} م.ب';
+  }
+
+  // Lets any user clear downloaded recitations to free up device storage.
+  Future<void> _manageStorage() async {
+    final count = _cache.downloadedCount;
+    if (count == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('لا توجد تلاوات محمّلة على جهازك'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+    final bytes = await _cache.totalBytes();
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تفريغ المساحة'),
+        content: Text(
+            'لديك $count تلاوة محمّلة تشغل ${_fmtSize(bytes)} من مساحة الجهاز.\n\n'
+            'هل تريد حذفها جميعاً؟ يمكنك إعادة تحميلها لاحقاً عند الحاجة.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('حذف الكل',
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await _cache.deleteAll();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('تم حذف التلاوات وتفريغ المساحة ✅'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return IslamicPatternBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('القرآن الكريم')),
+        appBar: AppBar(
+          title: const Text('القرآن الكريم'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.cleaning_services_outlined),
+              tooltip: 'تفريغ مساحة التلاوات المحمّلة',
+              onPressed: _manageStorage,
+            ),
+          ],
+        ),
         body: Column(
           children: [
             Padding(
