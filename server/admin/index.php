@@ -49,11 +49,18 @@ function admin_save_image(string $field): string {
 }
 
 // Sends a broadcast push to all app users. Never throws — push failures
-// should not block content from being saved.
-function broadcast_push(string $title, string $body, string $page): void {
+// should not block content from being saved. Returns 'ok' on success or a
+// short diagnostic string describing what went wrong.
+function broadcast_push(string $title, string $body, string $page): string {
+    if (!defined('BROADCAST_TOPIC')) {
+        return 'config.php قديم: لم يتم العثور على BROADCAST_TOPIC — أعد رفع config.php';
+    }
     try {
-        fcm_send(['topic' => BROADCAST_TOPIC], $title, $body, ['page' => $page]);
-    } catch (Throwable $e) { /* ignore push errors */ }
+        [$code, $res] = fcm_send(['topic' => BROADCAST_TOPIC], $title, $body, ['page' => $page]);
+        return $code === 200 ? 'ok' : "FCM فشل (رمز $code): $res";
+    } catch (Throwable $e) {
+        return 'خطأ: ' . $e->getMessage();
+    }
 }
 
 // ---- actions (only when logged in) ---------------------------------------
@@ -144,12 +151,14 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $title = trim($_POST['title'] ?? '');
         $bodyText = trim($_POST['body'] ?? '');
         if ($bodyText !== '' || $title !== '') {
-            broadcast_push(
+            $result = broadcast_push(
                 $title !== '' ? $title : 'مسجد وحسينية أهل البيت',
                 $bodyText !== '' ? $bodyText : 'لديك إشعار جديد',
                 trim($_POST['page'] ?? 'announcements')
             );
-            $flash = 'تم إرسال الإشعار لجميع المستخدمين';
+            $flash = $result === 'ok'
+                ? '✅ تم إرسال الإشعار بنجاح لجميع المستخدمين'
+                : '❌ ' . $result;
         } else {
             $flash = 'يرجى كتابة نص الإشعار';
         }
