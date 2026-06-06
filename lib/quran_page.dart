@@ -261,6 +261,41 @@ class QuranAudioCache extends ChangeNotifier {
     _progress.clear();
     notifyListeners();
   }
+
+  // ── Bulk "download all surahs" ─────────────────────────────────────────────
+  bool _bulkActive = false;
+  int _bulkDone = 0;
+  int _bulkTotal = 0;
+
+  bool get isBulkDownloading => _bulkActive;
+  int get bulkDone => _bulkDone;
+  int get bulkTotal => _bulkTotal;
+
+  /// Downloads every surah in [ids] that isn't already cached, one at a time.
+  Future<void> downloadAll(List<int> ids) async {
+    if (_bulkActive) return;
+    final pending = ids.where((id) => !isCached(id)).toList();
+    if (pending.isEmpty) return;
+    _bulkActive = true;
+    _bulkTotal = pending.length;
+    _bulkDone = 0;
+    notifyListeners();
+    for (final id in pending) {
+      if (!_bulkActive) break; // cancelled
+      try {
+        await download(id);
+      } catch (_) {}
+      _bulkDone++;
+      notifyListeners();
+    }
+    _bulkActive = false;
+    notifyListeners();
+  }
+
+  void cancelBulk() {
+    _bulkActive = false;
+    notifyListeners();
+  }
 }
 
 // ─── Surah List Page ─────────────────────────────────────────────────────────
@@ -382,6 +417,49 @@ class _QuranPageState extends State<QuranPage> {
     }
   }
 
+  // Downloads every surah for offline listening (confirms first, since it's a
+  // large download).
+  Future<void> _downloadAll() async {
+    if (_cache.isBulkDownloading) return;
+    final remaining =
+        _surahs.where((s) => !_cache.isCached(s.id)).length;
+    if (remaining == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('كل التلاوات محمّلة بالفعل ✅'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تحميل كل التلاوات'),
+        content: Text(
+            'سيتم تحميل $remaining سورة للاستماع دون إنترنت.\n\n'
+            'قد يستغرق ذلك وقتاً ويستهلك بيانات ومساحة كبيرة — '
+            'يُفضّل استخدام شبكة Wi-Fi.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('تحميل')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _cache.downloadAll(_surahs.map((s) => s.id).toList());
+    if (mounted && !_cache.isBulkDownloading) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('اكتمل تحميل التلاوات ✅'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -391,10 +469,30 @@ class _QuranPageState extends State<QuranPage> {
         appBar: AppBar(
           title: const Text('القرآن الكريم'),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.cleaning_services_outlined),
-              tooltip: 'تفريغ مساحة التلاوات المحمّلة',
-              onPressed: _manageStorage,
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (v) {
+                if (v == 'download_all') _downloadAll();
+                if (v == 'free_space') _manageStorage();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'download_all',
+                  child: ListTile(
+                    leading: Icon(Icons.download_for_offline_outlined),
+                    title: Text('تحميل كل التلاوات'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'free_space',
+                  child: ListTile(
+                    leading: Icon(Icons.cleaning_services_outlined),
+                    title: Text('تفريغ المساحة'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -415,6 +513,47 @@ class _QuranPageState extends State<QuranPage> {
                 ),
               ),
             ),
+
+            // Bulk-download progress banner
+            if (_cache.isBulkDownloading)
+              Container(
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'جارٍ تحميل التلاوات: '
+                            '${_cache.bulkDone} / ${_cache.bulkTotal}',
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          LinearProgressIndicator(
+                            value: _cache.bulkTotal == 0
+                                ? null
+                                : _cache.bulkDone / _cache.bulkTotal,
+                            minHeight: 5,
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _cache.cancelBulk,
+                      child: const Text('إيقاف',
+                          style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              ),
+
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
@@ -595,6 +734,7 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   bool _audioLoading = false;
+  double _speed = 1.0; // playback speed: 1x / 1.5x / 2x
 
   // Ayah-by-ayah highlight sync
   List<Verse>? _verses; // verses of the current surah
@@ -741,6 +881,7 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
       try {
         final url = await _resolveAudioUrl();
         await _player.setUrl(url);
+        await _player.setSpeed(_speed);
         setState(() => _audioLoading = false);
       } catch (e) {
         setState(() => _audioLoading = false);
@@ -759,6 +900,22 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
     await _player.stop();
     _setActiveAyah(null);
   }
+
+  // Cycles playback speed 1x → 1.5x → 2x → 1x.
+  Future<void> _cycleSpeed() async {
+    final next = _speed == 1.0
+        ? 1.5
+        : _speed == 1.5
+            ? 2.0
+            : 1.0;
+    setState(() => _speed = next);
+    try {
+      await _player.setSpeed(next);
+    } catch (_) {}
+  }
+
+  String get _speedLabel =>
+      _speed == 1.0 ? '1x' : (_speed == 1.5 ? '1.5x' : '2x');
 
   void _goTo(int index) {
     if (index < 0 || index >= widget.surahs.length) return;
@@ -847,7 +1004,21 @@ class _SurahReaderPageState extends State<SurahReaderPage> {
                           : null,
                       icon: const Icon(Icons.skip_previous),
                     ),
-                    const SizedBox(width: 8),
+                    // Playback speed (1x / 1.5x / 2x)
+                    TextButton(
+                      onPressed: _cycleSpeed,
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(40, 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        foregroundColor: cs.primary,
+                      ),
+                      child: Text(
+                        _speedLabel,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
