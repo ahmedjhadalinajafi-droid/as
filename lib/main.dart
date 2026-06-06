@@ -784,143 +784,141 @@ class _HomePageState extends State<HomePage> {
     final isDark = theme.isDark;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Gradient background
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [const Color(0xFF0A1628), const Color(0xFF2A1F00)]
-                    : [const Color(0xFF1B3D6F), const Color(0xFF2A5BA8)],
-                begin: Alignment.topCenter,
-                end: Alignment.center,
+      backgroundColor:
+          isDark ? const Color(0xFF0A1628) : const Color(0xFFF3EFE2),
+      body: RefreshIndicator(
+        onRefresh: _loadPrayerTimes,
+        // Everything (header + prayer card + content) lives in ONE scroll view
+        // so the prayer time scrolls up with the page instead of staying fixed.
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            // ── Blue header section (scrolls with the page) ──
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [const Color(0xFF0A1628), const Color(0xFF2A1F00)]
+                      : [const Color(0xFF1B3D6F), const Color(0xFF2A5BA8)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               ),
-            ),
-          ),
-          // Bottom white/surface area with Islamic pattern
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(32)),
-              child: SizedBox(
-                height: MediaQuery.of(context).size.height * 0.55,
-                width: double.infinity,
-                child: const IslamicPatternBackground(child: SizedBox.expand()),
-              ),
-            ),
-          ),
-          // Islamic pattern overlay on top gradient
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: MediaQuery.of(context).size.height * 0.48,
-            child: CustomPaint(
-              painter: IslamicPatternPainter(Colors.white.withOpacity(0.05)),
-            ),
-          ),
-
-          SafeArea(
-            child: Column(
-              children: [
-                // AppBar row
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        onPressed: theme.toggle,
-                        icon: Icon(
-                          isDark ? Icons.light_mode : Icons.dark_mode,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const Text(
-                        'مسجد أهل البيت ع',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'ScheherazadeNew',
-                        ),
-                      ),
-                      Image.asset(
-                        'assets/images/logo.png',
-                        height: 32,
-                        errorBuilder: (_, __, ___) =>
-                            const Icon(Icons.mosque, color: _gold, size: 26),
-                      ),
-                    ],
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: IslamicPatternPainter(
+                          Colors.white.withOpacity(0.05)),
+                    ),
                   ),
-                ),
-
-                // Hijri date
-                const _HijriDateChip(),
-                const SizedBox(height: 12),
-
-                // Day-of-week duaa / ziyarat shortcuts (like the photo)
-                const _DayWorshipTabs(),
-                const SizedBox(height: 12),
-
-                // Countdown card — tap to see full day's prayer times
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _loading
-                      ? const SizedBox(
-                          height: 100,
-                          child: Center(
-                              child: CircularProgressIndicator(
-                                  color: Colors.white)))
-                      : GestureDetector(
-                          onTap: _showPrayerTimesCard,
-                          child: _buildCountdownCard(),
+                  SafeArea(
+                    bottom: false,
+                    child: Column(
+                      children: [
+                        // AppBar row
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              IconButton(
+                                onPressed: theme.toggle,
+                                icon: Icon(
+                                  isDark ? Icons.light_mode : Icons.dark_mode,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const Text(
+                                'مسجد أهل البيت ع',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'ScheherazadeNew',
+                                ),
+                              ),
+                              Image.asset(
+                                'assets/images/logo.png',
+                                height: 32,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.mosque, color: _gold, size: 26),
+                              ),
+                            ],
+                          ),
                         ),
-                ),
 
-                const SizedBox(height: 20),
+                        // Hijri date
+                        const _HijriDateChip(),
+                        const SizedBox(height: 12),
 
-                // Scrollable content
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                    child: RefreshIndicator(
-                      onRefresh: _loadPrayerTimes,
-                      child: ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
-                        children: [
-                          // Quick actions
-                          _buildQuickActions(context, cs),
-                          const SizedBox(height: 12),
+                        // Day-of-week duaa / ziyarat shortcuts
+                        const _DayWorshipTabs(),
+                        const SizedBox(height: 12),
 
-                          // YouTube channel shortcut
-                          const _YoutubeChannelBanner(),
-                          const SizedBox(height: 12),
+                        // Countdown card — tap to see full day's prayer times
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: _loading
+                              ? const SizedBox(
+                                  height: 100,
+                                  child: Center(
+                                      child: CircularProgressIndicator(
+                                          color: Colors.white)))
+                              : GestureDetector(
+                                  onTap: _showPrayerTimesCard,
+                                  child: _buildCountdownCard(),
+                                ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-                          // Ask a question shortcut
-                          const _AskQuestionBanner(),
-                          const SizedBox(height: 20),
+            // ── Cream content section with rounded top (overlaps header) ──
+            Transform.translate(
+              offset: const Offset(0, -20),
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(32)),
+                child: IslamicPatternBackground(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 110),
+                    child: Column(
+                      children: [
+                        // Quick actions
+                        _buildQuickActions(context, cs),
+                        const SizedBox(height: 12),
 
-                          // Featured (boosted) events
-                          const _HomeFeaturedEvents(),
+                        // YouTube channel shortcut
+                        const _YoutubeChannelBanner(),
+                        const SizedBox(height: 12),
 
-                          // Announcements
-                          const _HomeAnnouncementsSection(),
-                          const SizedBox(height: 20),
+                        // Ask a question shortcut
+                        const _AskQuestionBanner(),
+                        const SizedBox(height: 20),
 
-                          // Image slider
-                          const _HomeImageSlider(),
-                        ],
-                      ),
+                        // Featured (boosted) events
+                        const _HomeFeaturedEvents(),
+
+                        // Announcements
+                        const _HomeAnnouncementsSection(),
+                        const SizedBox(height: 20),
+
+                        // Image slider
+                        const _HomeImageSlider(),
+                      ],
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
