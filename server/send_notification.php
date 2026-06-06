@@ -52,6 +52,19 @@ try {
         json_out(['ok' => $code === 200, 'code' => $code, 'res' => $res]);
     }
 
+    // Broadcast to ALL app users (new event / trip / announcement / custom).
+    if ($type === 'broadcast') {
+        $title = trim((string)($in['title'] ?? 'مسجد وحسينية أهل البيت'));
+        $page  = trim((string)($in['page'] ?? 'announcements'));
+        [$code, $res] = fcm_send(
+            ['topic' => BROADCAST_TOPIC],
+            $title !== '' ? $title : 'مسجد وحسينية أهل البيت',
+            $body !== '' ? $body : 'لديك تحديث جديد، افتح التطبيق',
+            ['page' => $page]
+        );
+        json_out(['ok' => $code === 200, 'code' => $code, 'res' => $res]);
+    }
+
     json_out(['ok' => false, 'error' => 'unknown type'], 400);
 } catch (Throwable $e) {
     json_out(['ok' => false, 'error' => $e->getMessage()], 500);

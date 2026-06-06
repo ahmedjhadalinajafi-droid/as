@@ -35,6 +35,22 @@ class Backend {
         {'type': 'answer', 'token': clientToken, 'body': preview});
   }
 
+  /// Broadcasts a push to ALL app users (e.g. when a new event, trip or
+  /// announcement is posted). [page] routes the tap to the right screen
+  /// ('events', 'trips', 'announcements', ...).
+  static Future<void> notifyBroadcast({
+    required String title,
+    required String body,
+    String page = 'announcements',
+  }) async {
+    await _postNotification({
+      'type': 'broadcast',
+      'title': title,
+      'body': body,
+      'page': page,
+    });
+  }
+
   static Future<void> _postNotification(Map<String, String> body) async {
     if (!isConfigured) return;
     try {

@@ -48,6 +48,14 @@ function admin_save_image(string $field): string {
     return "$scheme://$host$dir/uploads/$name";
 }
 
+// Sends a broadcast push to all app users. Never throws — push failures
+// should not block content from being saved.
+function broadcast_push(string $title, string $body, string $page): void {
+    try {
+        fcm_send(['topic' => BROADCAST_TOPIC], $title, $body, ['page' => $page]);
+    } catch (Throwable $e) { /* ignore push errors */ }
+}
+
 // ---- actions (only when logged in) ---------------------------------------
 $flash = '';
 if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -56,8 +64,9 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'add_event') {
         $img = admin_save_image('image');
         $dt  = $_POST['date'] ? new DateTime($_POST['date']) : new DateTime();
+        $title = trim($_POST['title'] ?? '');
         fs_add('events', [
-            'title'       => trim($_POST['title'] ?? ''),
+            'title'       => $title,
             'description' => trim($_POST['description'] ?? ''),
             'location'    => trim($_POST['location'] ?? ''),
             'category'    => $_POST['category'] ?? 'فعالية',
@@ -66,6 +75,9 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'date'        => $dt,
             'createdAt'   => new DateTime(),
         ]);
+        if (isset($_POST['notify'])) {
+            broadcast_push('فعالية جديدة 🗓️', $title, 'events');
+        }
         $flash = 'تمت إضافة الفعالية';
     }
 
@@ -74,21 +86,73 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $flash = 'تم حذف الفعالية';
     }
 
+    if ($action === 'add_trip') {
+        $img = admin_save_image('image');
+        $dt  = $_POST['date'] ? new DateTime($_POST['date']) : new DateTime();
+        $title = trim($_POST['title'] ?? '');
+        $dest  = trim($_POST['destination'] ?? '');
+        fs_add('trips', [
+            'title'       => $title,
+            'description' => trim($_POST['description'] ?? ''),
+            'destination' => $dest,
+            'cost'        => trim($_POST['cost'] ?? ''),
+            'contact'     => trim($_POST['contact'] ?? ''),
+            'imageUrl'    => $img,
+            'boosted'     => isset($_POST['boosted']),
+            'date'        => $dt,
+            'createdAt'   => new DateTime(),
+        ]);
+        if (isset($_POST['notify'])) {
+            $b = $dest !== '' ? "$title — $dest" : $title;
+            broadcast_push('رحلة جديدة 🚌', $b, 'trips');
+        }
+        $flash = 'تمت إضافة الرحلة';
+    }
+
+    if ($action === 'delete_trip') {
+        fs_delete('trips', $_POST['id']);
+        $flash = 'تم حذف الرحلة';
+    }
+
     if ($action === 'add_announcement') {
         $img = admin_save_image('image');
+        $title = trim($_POST['title'] ?? '');
+        $bodyText = trim($_POST['body'] ?? '');
         fs_add('announcements', [
-            'title'     => trim($_POST['title'] ?? ''),
-            'body'      => trim($_POST['body'] ?? ''),
+            'title'     => $title,
+            'body'      => $bodyText,
             'imageUrl'  => $img,
             'linkUrl'   => trim($_POST['link'] ?? ''),
             'createdAt' => new DateTime(),
         ]);
+        if (isset($_POST['notify'])) {
+            broadcast_push(
+                $title !== '' ? $title : 'إعلان جديد 📢',
+                $bodyText !== '' ? $bodyText : 'تم نشر إعلان جديد',
+                'announcements'
+            );
+        }
         $flash = 'تمت إضافة الإعلان';
     }
 
     if ($action === 'delete_announcement') {
         fs_delete('announcements', $_POST['id']);
         $flash = 'تم حذف الإعلان';
+    }
+
+    if ($action === 'send_broadcast') {
+        $title = trim($_POST['title'] ?? '');
+        $bodyText = trim($_POST['body'] ?? '');
+        if ($bodyText !== '' || $title !== '') {
+            broadcast_push(
+                $title !== '' ? $title : 'مسجد وحسينية أهل البيت',
+                $bodyText !== '' ? $bodyText : 'لديك إشعار جديد',
+                trim($_POST['page'] ?? 'announcements')
+            );
+            $flash = 'تم إرسال الإشعار لجميع المستخدمين';
+        } else {
+            $flash = 'يرجى كتابة نص الإشعار';
+        }
     }
 
     if ($action === 'answer_question') {
@@ -181,8 +245,10 @@ $tab = $_GET['tab'] ?? 'events';
   </header>
   <div class="tabs">
     <a href="?tab=events" class="<?= $tab==='events'?'active':'' ?>">الفعاليات</a>
+    <a href="?tab=trips" class="<?= $tab==='trips'?'active':'' ?>">الرحلات</a>
     <a href="?tab=announcements" class="<?= $tab==='announcements'?'active':'' ?>">الإعلانات</a>
     <a href="?tab=questions" class="<?= $tab==='questions'?'active':'' ?>">الأسئلة</a>
+    <a href="?tab=notify" class="<?= $tab==='notify'?'active':'' ?>">الإشعارات</a>
   </div>
   <?php if ($flash): ?><div class="flash"><?= h($flash) ?></div><?php endif; ?>
   <div class="wrap">
@@ -203,7 +269,8 @@ $tab = $_GET['tab'] ?? 'events';
         <label>المكان</label><input name="location">
         <label>الوصف</label><textarea name="description" rows="3"></textarea>
         <label>صورة</label><input type="file" name="image" accept="image/*">
-        <label><input type="checkbox" name="boosted" style="width:auto"> تمييز (مميز)</label><br><br>
+        <label><input type="checkbox" name="boosted" style="width:auto"> تمييز (مميز)</label><br>
+        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br><br>
         <button>نشر الفعالية</button>
       </form>
     </div>
@@ -226,6 +293,69 @@ $tab = $_GET['tab'] ?? 'events';
       </div>
     <?php endforeach; ?>
 
+  <?php elseif ($tab === 'trips'): ?>
+    <div class="card">
+      <h3 style="margin-top:0">➕ رحلة جديدة</h3>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="add_trip">
+        <label>عنوان الرحلة</label><input name="title" required>
+        <label>الوجهة (مثال: كربلاء المقدسة)</label><input name="destination">
+        <label>موعد الانطلاق</label>
+        <input type="datetime-local" name="date" required>
+        <label>التكلفة (مثال: 25 ألف دينار)</label><input name="cost">
+        <label>رقم الحجز / واتساب</label><input name="contact" placeholder="+9647xxxxxxxxx">
+        <label>تفاصيل الرحلة</label><textarea name="description" rows="3"></textarea>
+        <label>صورة</label><input type="file" name="image" accept="image/*">
+        <label><input type="checkbox" name="boosted" style="width:auto"> تمييز (مميز)</label><br>
+        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br><br>
+        <button>نشر الرحلة</button>
+      </form>
+    </div>
+    <?php
+      $trips = fs_list('trips');
+      usort($trips, fn($a,$b) => ($b['date']??'') <=> ($a['date']??''));
+      foreach ($trips as $t): ?>
+      <div class="card">
+        <?php if (!empty($t['imageUrl'])): ?><img src="<?= h($t['imageUrl']) ?>"><?php endif; ?>
+        <div class="row">
+          <strong><?= h($t['title'] ?? '') ?></strong>
+          <form method="post" onsubmit="return confirm('حذف؟')">
+            <input type="hidden" name="action" value="delete_trip">
+            <input type="hidden" name="id" value="<?= h($t['_id']) ?>">
+            <button class="danger">حذف</button>
+          </form>
+        </div>
+        <div class="muted">
+          <?= h($t['destination'] ?? '') ?>
+          <?php if (!empty($t['cost'])): ?> · <?= h($t['cost']) ?><?php endif; ?>
+          · <?= h($t['date'] ?? '') ?>
+        </div>
+        <?php if (!empty($t['description'])): ?><p><?= h($t['description']) ?></p><?php endif; ?>
+      </div>
+    <?php endforeach; ?>
+
+  <?php elseif ($tab === 'notify'): ?>
+    <div class="card">
+      <h3 style="margin-top:0">🔔 إرسال إشعار لجميع المستخدمين</h3>
+      <p class="muted">يصل هذا الإشعار فوراً إلى كل من ثبّت التطبيق على هاتفه.</p>
+      <form method="post">
+        <input type="hidden" name="action" value="send_broadcast">
+        <label>عنوان الإشعار</label>
+        <input name="title" placeholder="مسجد وحسينية أهل البيت" required>
+        <label>نص الإشعار</label>
+        <textarea name="body" rows="3" placeholder="اكتب نص الرسالة..." required></textarea>
+        <label>الصفحة التي تُفتح عند الضغط</label>
+        <select name="page">
+          <option value="announcements">الإعلانات</option>
+          <option value="events">الفعاليات</option>
+          <option value="trips">الرحلات</option>
+          <option value="home">الرئيسية</option>
+          <option value="prayer">أوقات الصلاة</option>
+        </select>
+        <button>📤 إرسال الإشعار الآن</button>
+      </form>
+    </div>
+
   <?php elseif ($tab === 'announcements'): ?>
     <div class="card">
       <h3 style="margin-top:0">➕ إعلان جديد</h3>
@@ -235,6 +365,7 @@ $tab = $_GET['tab'] ?? 'events';
         <label>النص</label><textarea name="body" rows="4"></textarea>
         <label>رابط يوتيوب (اختياري)</label><input name="link" placeholder="https://youtube.com/...">
         <label>صورة</label><input type="file" name="image" accept="image/*">
+        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار لجميع المستخدمين</label><br><br>
         <button>نشر الإعلان</button>
       </form>
     </div>

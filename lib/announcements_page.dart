@@ -375,6 +375,17 @@ class _AddAnnouncementPageState extends State<_AddAnnouncementPage> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      // Push a notification to all app users about the new announcement.
+      await Backend.notifyBroadcast(
+        title: _title.text.trim().isNotEmpty
+            ? _title.text.trim()
+            : 'إعلان جديد 📢',
+        body: _body.text.trim().isNotEmpty
+            ? _body.text.trim()
+            : 'تم نشر إعلان جديد، افتح التطبيق',
+        page: 'announcements',
+      );
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

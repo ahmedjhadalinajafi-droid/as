@@ -27,6 +27,10 @@ const FIREBASE_API_KEY = 'AIzaSyDXZ5eeDDV4Bv1UT281nvXdjTBDs-DfXZY';
 // FCM topic that admin devices subscribe to. New-question pushes go here.
 const ADMIN_TOPIC = 'admin_questions';
 
+// FCM topic that EVERY app user subscribes to. Broadcast pushes (new event,
+// new trip, new announcement, custom messages) go here so all devices get them.
+const BROADCAST_TOPIC = 'announcements';
+
 // Where uploaded images are stored and served from.
 const UPLOAD_DIR = __DIR__ . '/uploads';
 // Public base URL of the uploads folder. Set this to match your domain, e.g.

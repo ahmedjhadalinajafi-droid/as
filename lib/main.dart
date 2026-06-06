@@ -22,6 +22,7 @@ import 'backend_config.dart';
 import 'campaigns_page.dart';
 import 'date_converter_page.dart';
 import 'events_page.dart';
+import 'trips_page.dart';
 import 'hijri_calendar_page.dart';
 import 'islamic_background.dart';
 import 'mafatih_page.dart';
@@ -266,6 +267,7 @@ class _MainShellState extends State<MainShell> {
     'announcements': 5,
     'mafatih': 5,
     'ziyarat': 5,
+    'trips': 5,
     'quran': 5,
   };
 
@@ -2197,6 +2199,12 @@ class MorePage extends StatelessWidget {
         label: 'الزيارات',
         color: const Color(0xFF795548),
         page: const ZiyaratPage(),
+      ),
+      _MoreItem(
+        icon: Icons.directions_bus_filled,
+        label: 'الرحلات',
+        color: const Color(0xFF00897B),
+        page: const TripsPage(),
       ),
       _MoreItem(
         icon: Icons.question_answer_rounded,
