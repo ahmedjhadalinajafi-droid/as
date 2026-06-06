@@ -31,7 +31,7 @@ const ADMIN_TOPIC = 'admin_questions';
 const UPLOAD_DIR = __DIR__ . '/uploads';
 // Public base URL of the uploads folder. Set this to match your domain, e.g.
 // 'https://yoursite.com/uploads'. Leave as null to auto-detect.
-const UPLOAD_BASE_URL = 'https://ahlulbaytmosque.site/app/uploads';
+const UPLOAD_BASE_URL = 'https://ahlulbaytmosque.site/app/server/uploads';
 
 // Max upload size in bytes (5 MB).
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;

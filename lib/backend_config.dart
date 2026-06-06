@@ -15,7 +15,7 @@ class Backend {
   // upload_image.php and version.json. Example:
   //   'https://yoursite.com'         (if you uploaded into public_html)
   //   'https://yoursite.com/app'     (if you uploaded into public_html/app)
-  static const String baseUrl = 'https://ahlulbaytmosque.site/app';
+  static const String baseUrl = 'https://ahlulbaytmosque.site/app/server';
 
   // Must match API_SECRET in server/config.php
   static const String secret = 'ahlulbayt-masjid-2026-Kx9mPq7Lz3Wn8Rv';

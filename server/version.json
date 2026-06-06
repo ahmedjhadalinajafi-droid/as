@@ -1,7 +1,7 @@
 {
   "version": "1.0.1",
   "build": 2,
-  "url": "https://ahlulbaytmosque.site/app/app-release.apk",
+  "url": "https://ahlulbaytmosque.site/app/server/app-release.apk",
   "mandatory": false,
   "notes": "أحدث إصدار من تطبيق مسجد وحسينية أهل البيت"
 }
