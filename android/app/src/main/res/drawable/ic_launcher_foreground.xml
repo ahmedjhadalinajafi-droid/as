@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Mosque dome -->
+    <path
+        android:fillColor="#C9A843"
+        android:pathData="M54,20 C40,20 28,32 28,46 L28,52 L80,52 L80,46 C80,32 68,20 54,20 Z" />
+    <!-- Minaret left -->
+    <path
+        android:fillColor="#C9A843"
+        android:pathData="M32,30 L36,30 L36,52 L32,52 Z" />
+    <!-- Minaret right -->
+    <path
+        android:fillColor="#C9A843"
+        android:pathData="M72,30 L76,30 L76,52 L72,52 Z" />
+    <!-- Main body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M22,52 L86,52 L86,82 L22,82 Z" />
+    <!-- Door -->
+    <path
+        android:fillColor="#C9A843"
+        android:pathData="M48,65 C48,61 50,58 54,58 C58,58 60,61 60,65 L60,82 L48,82 Z" />
+    <!-- Windows -->
+    <path
+        android:fillColor="#C9A843"
+        android:pathData="M30,60 L38,60 L38,68 L30,68 Z" />
+    <path
+        android:fillColor="#C9A843"
+        android:pathData="M70,60 L78,60 L78,68 L70,68 Z" />
+</vector>

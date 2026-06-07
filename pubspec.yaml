@@ -1,0 +1,90 @@
+name: masjid_app
+description: مسجد وحسينية أهل البيت - بغداد - المنصور
+
+publish_to: 'none'
+version: 1.0.1+2
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Firebase — stable iOS-compatible versions
+  firebase_core: ^3.13.1
+  cloud_firestore: ^5.6.0
+  firebase_messaging: ^15.2.5
+  firebase_auth: ^5.5.2
+  firebase_analytics: ^11.3.3
+  google_sign_in: ^6.2.2
+
+  # Local Notifications — prayer time scheduling
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+
+  # Location & Compass
+  geolocator: ^14.0.2
+  flutter_compass: ^0.8.0
+
+  # Media
+  image_picker: ^1.0.7
+  cached_network_image: ^3.3.1
+  just_audio: ^0.9.36
+  audio_session: ^0.1.18
+
+  # Calendar & Date
+  hijri: ^3.0.1
+  intl: ^0.20.2
+
+  # Storage & State
+  shared_preferences: ^2.2.2
+  provider: ^6.1.1
+  path_provider: ^2.1.2
+  http: ^1.2.1
+
+  # URL Launcher — opens social media links
+  url_launcher: ^6.2.5
+
+  # Home-screen prayer times widget (Android + iOS)
+  home_widget: ^0.6.0
+
+  # Reads the app version for the "update available" check
+  package_info_plus: ^8.0.0
+
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+  # App launcher icon generator — run: dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.1
+
+# App icon configuration. Put your 1024x1024 mosque logo at
+# assets/icon/app_icon.png then run:  dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  remove_alpha_ios: true
+  # Adaptive icon for Android 8+ (logo on a navy background)
+  adaptive_icon_background: "#1B3D6F"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/quran.json
+    - assets/mafatih.json
+    - assets/prayer_times_2026.json
+
+  fonts:
+    - family: ScheherazadeNew
+      fonts:
+        - asset: assets/fonts/ScheherazadeNew-Regular.ttf

@@ -1,0 +1,14 @@
+# Block direct download of sensitive files (service account, config, ini, docs)
+<FilesMatch "\.(json|md|ini)$">
+    Require all denied
+</FilesMatch>
+
+# version.json must stay publicly readable (the app fetches it)
+<Files "version.json">
+    Require all granted
+</Files>
+
+# Never serve the service-account or config
+<FilesMatch "^(service-account\.json|config\.php)$">
+    Require all denied
+</FilesMatch>

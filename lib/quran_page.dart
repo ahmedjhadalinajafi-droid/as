@@ -1,0 +1,1345 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:audio_session/audio_session.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'islamic_background.dart';
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+class Surah {
+  final int id;
+  final String name;
+  final String nameEn;
+  final String type;
+  final int versesCount;
+
+  const Surah({
+    required this.id,
+    required this.name,
+    required this.nameEn,
+    required this.type,
+    required this.versesCount,
+  });
+
+  factory Surah.fromJson(Map<String, dynamic> j) {
+    return Surah(
+      id: j['id'] as int? ?? 0,
+      name: j['name'] as String? ?? '',
+      nameEn: (j['transliteration'] ?? j['name_en'] ?? '') as String,
+      type: j['type'] as String? ?? '',
+      versesCount:
+          j['total_verses'] as int? ?? j['verses_count'] as int? ?? 0,
+    );
+  }
+}
+
+class Verse {
+  final int id;
+  final String text;
+  const Verse({required this.id, required this.text});
+}
+
+// Global raw data — parsed once, verses extracted on demand
+List<dynamic>? _rawQuranData;
+final Map<int, List<Verse>> _versesCache = {};
+
+Future<void> _ensureLoaded() async {
+  if (_rawQuranData != null) return;
+  final raw = await rootBundle.loadString('assets/quran.json');
+  _rawQuranData = json.decode(raw) as List<dynamic>;
+}
+
+Future<List<Verse>> loadVerses(int surahId) async {
+  if (_versesCache.containsKey(surahId)) return _versesCache[surahId]!;
+  await _ensureLoaded();
+  final surahData = _rawQuranData!.firstWhere(
+    (s) => (s as Map<String, dynamic>)['id'] == surahId,
+    orElse: () => <String, dynamic>{},
+  ) as Map<String, dynamic>;
+  final verses = (surahData['verses'] as List<dynamic>? ?? [])
+      .map((v) {
+        final m = v as Map<String, dynamic>;
+        return Verse(
+          id: m['id'] as int? ?? m['verse_number'] as int? ?? 0,
+          text: m['text'] as String? ?? '',
+        );
+      })
+      .toList();
+  _versesCache[surahId] = verses;
+  // Keep cache small — evict oldest beyond 5 surahs
+  if (_versesCache.length > 5) {
+    final oldest = _versesCache.keys.first;
+    _versesCache.remove(oldest);
+  }
+  return verses;
+}
+
+// ─── Audio Download Manager ───────────────────────────────────────────────────
+
+/// Singleton that manages local caching of surah audio files.
+/// - cached     → plays from device storage (offline)
+/// - not cached → streams from Firebase Storage
+class QuranAudioCache extends ChangeNotifier {
+  QuranAudioCache._();
+  static final QuranAudioCache instance = QuranAudioCache._();
+
+  Directory? _dir;
+
+  // download progress per surah id: null = not downloading, 0..1 = in progress
+  final Map<int, double> _progress = {};
+
+  // surah ids that are fully downloaded
+  final Set<int> _cached = {};
+
+  // active download futures to prevent double-downloads
+  final Map<int, Future<void>> _active = {};
+
+  // Admin-uploaded recitation URLs (surah id → mp3 url). When present for a
+  // surah, it overrides the default al-Afasy CDN.
+  final Map<int, String> _customUrls = {};
+
+  bool hasCustom(int id) => _customUrls.containsKey(id);
+
+  /// The remote audio URL for a surah: an admin upload if available, else the
+  /// free al-Afasy CDN.
+  String remoteUrl(int id) =>
+      _customUrls[id] ??
+      'https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/$id.mp3';
+
+  /// Loads admin-uploaded recitation URLs from Firestore (collection
+  /// `quran_audio`, doc id = surah number, field `url`). Safe offline.
+  Future<void> loadCustomUrls() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('quran_audio')
+          .get()
+          .timeout(const Duration(seconds: 6));
+      _customUrls.clear();
+      for (final doc in snap.docs) {
+        final id = int.tryParse(doc.id);
+        final url = (doc.data()['url'] as String?)?.trim() ?? '';
+        if (id != null && url.isNotEmpty) _customUrls[id] = url;
+      }
+      notifyListeners();
+    } catch (_) {
+      // offline or unavailable — keep whatever we have
+    }
+  }
+
+  Future<void> init() async {
+    final base = await getApplicationDocumentsDirectory();
+    _dir = Directory('${base.path}/quran_audio');
+    await _dir!.create(recursive: true);
+    // scan what is already on disk
+    await _dir!.list().forEach((e) {
+      if (e is File && e.path.endsWith('.mp3')) {
+        final name = e.uri.pathSegments.last;
+        final id = int.tryParse(name.replaceAll('.mp3', ''));
+        if (id != null) _cached.add(id);
+      }
+    });
+    notifyListeners();
+  }
+
+  bool isCached(int id) => _cached.contains(id);
+  double? progress(int id) => _progress[id];
+  bool isDownloading(int id) => _progress.containsKey(id);
+
+  File _file(int id) => File('${_dir!.path}/$id.mp3');
+  File _timingFile(int id) => File('${_dir!.path}/$id.json');
+
+  /// Returns a local file path if cached, otherwise null.
+  String? localPath(int id) => isCached(id) ? _file(id).path : null;
+
+  /// Returns locally-saved timing bytes if present, otherwise null.
+  Future<List<double>?> localTimings(int id) async {
+    try {
+      final f = _timingFile(id);
+      if (!await f.exists()) return null;
+      final decoded = json.decode(await f.readAsString());
+      if (decoded is List) {
+        return decoded.map((e) => (e as num).toDouble()).toList();
+      } else if (decoded is Map && decoded['ayahs'] is List) {
+        return (decoded['ayahs'] as List)
+            .map((e) => (e as num).toDouble())
+            .toList();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> download(int id) async {
+    if (isCached(id) || isDownloading(id)) return;
+    _active[id] = _doDownload(id);
+    await _active[id];
+    _active.remove(id);
+  }
+
+  Future<void> _doDownload(int id) async {
+    try {
+      _progress[id] = 0;
+      notifyListeners();
+
+      // Admin-uploaded recitation if available, else the free al-Afasy CDN.
+      final url = remoteUrl(id);
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await request.send();
+      final total = response.contentLength ?? 0;
+      int received = 0;
+
+      final file = _file(id);
+      final sink = file.openWrite();
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total > 0) {
+          _progress[id] = received / total;
+          notifyListeners();
+        }
+      }
+      await sink.flush();
+      await sink.close();
+
+      // Timing JSON not available on free plan — ayah highlighting uses
+      // letter-count estimation instead (see _ayahStarts fallback).
+
+      _cached.add(id);
+      _progress.remove(id);
+      notifyListeners();
+    } catch (_) {
+      _progress.remove(id);
+      final f = _file(id);
+      if (await f.exists()) await f.delete();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> delete(int id) async {
+    final f = _file(id);
+    if (await f.exists()) await f.delete();
+    final t = _timingFile(id);
+    if (await t.exists()) await t.delete();
+    _cached.remove(id);
+    notifyListeners();
+  }
+
+  /// Number of surahs downloaded on the device.
+  int get downloadedCount => _cached.length;
+
+  /// Total bytes used by all downloaded recitations.
+  Future<int> totalBytes() async {
+    if (_dir == null) return 0;
+    int sum = 0;
+    try {
+      await for (final e in _dir!.list()) {
+        if (e is File && e.path.endsWith('.mp3')) sum += await e.length();
+      }
+    } catch (_) {}
+    return sum;
+  }
+
+  /// Deletes every downloaded recitation to free up storage.
+  Future<void> deleteAll() async {
+    if (_dir == null) return;
+    try {
+      await for (final e in _dir!.list()) {
+        if (e is File &&
+            (e.path.endsWith('.mp3') || e.path.endsWith('.json'))) {
+          try {
+            await e.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    _cached.clear();
+    _progress.clear();
+    notifyListeners();
+  }
+
+  // ── Bulk "download all surahs" ─────────────────────────────────────────────
+  bool _bulkActive = false;
+  int _bulkDone = 0;
+  int _bulkTotal = 0;
+
+  bool get isBulkDownloading => _bulkActive;
+  int get bulkDone => _bulkDone;
+  int get bulkTotal => _bulkTotal;
+
+  /// Downloads every surah in [ids] that isn't already cached, one at a time.
+  Future<void> downloadAll(List<int> ids) async {
+    if (_bulkActive) return;
+    final pending = ids.where((id) => !isCached(id)).toList();
+    if (pending.isEmpty) return;
+    _bulkActive = true;
+    _bulkTotal = pending.length;
+    _bulkDone = 0;
+    notifyListeners();
+    for (final id in pending) {
+      if (!_bulkActive) break; // cancelled
+      try {
+        await download(id);
+      } catch (_) {}
+      _bulkDone++;
+      notifyListeners();
+    }
+    _bulkActive = false;
+    notifyListeners();
+  }
+
+  void cancelBulk() {
+    _bulkActive = false;
+    notifyListeners();
+  }
+}
+
+// ─── Surah List Page ─────────────────────────────────────────────────────────
+
+class QuranPage extends StatefulWidget {
+  const QuranPage({super.key});
+
+  @override
+  State<QuranPage> createState() => _QuranPageState();
+}
+
+class _QuranPageState extends State<QuranPage> {
+  List<Surah> _surahs = [];
+  List<Surah> _filtered = [];
+  bool _loading = true;
+  final _search = TextEditingController();
+  final _cache = QuranAudioCache.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+    _search.addListener(_filter);
+    _cache.addListener(_onCacheChange);
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _cache.removeListener(_onCacheChange);
+    super.dispose();
+  }
+
+  void _onCacheChange() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _init() async {
+    await _cache.init();
+    // Pull any admin-uploaded recitations (non-blocking if offline).
+    _cache.loadCustomUrls();
+    try {
+      await _ensureLoaded();
+      final surahs = _rawQuranData!
+          .map((e) => Surah.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (mounted) {
+        setState(() {
+          _surahs = surahs;
+          _filtered = surahs;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _filter() {
+    final q = _search.text.trim();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _surahs
+          : _surahs
+              .where((s) =>
+                  s.name.contains(q) ||
+                  s.nameEn.toLowerCase().contains(q.toLowerCase()) ||
+                  s.id.toString() == q)
+              .toList();
+    });
+  }
+
+  static String _fmtSize(int bytes) {
+    if (bytes < 1024) return '$bytes بايت';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} ك.ب';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} م.ب';
+  }
+
+  // Lets any user clear downloaded recitations to free up device storage.
+  Future<void> _manageStorage() async {
+    final count = _cache.downloadedCount;
+    if (count == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('لا توجد تلاوات محمّلة على جهازك'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+    final bytes = await _cache.totalBytes();
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تفريغ المساحة'),
+        content: Text(
+            'لديك $count تلاوة محمّلة تشغل ${_fmtSize(bytes)} من مساحة الجهاز.\n\n'
+            'هل تريد حذفها جميعاً؟ يمكنك إعادة تحميلها لاحقاً عند الحاجة.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('حذف الكل',
+                  style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await _cache.deleteAll();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('تم حذف التلاوات وتفريغ المساحة ✅'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
+  // Downloads every surah for offline listening (confirms first, since it's a
+  // large download).
+  Future<void> _downloadAll() async {
+    if (_cache.isBulkDownloading) return;
+    final remaining =
+        _surahs.where((s) => !_cache.isCached(s.id)).length;
+    if (remaining == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('كل التلاوات محمّلة بالفعل ✅'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تحميل كل التلاوات'),
+        content: Text(
+            'سيتم تحميل $remaining سورة للاستماع دون إنترنت.\n\n'
+            'قد يستغرق ذلك وقتاً ويستهلك بيانات ومساحة كبيرة — '
+            'يُفضّل استخدام شبكة Wi-Fi.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('تحميل')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _cache.downloadAll(_surahs.map((s) => s.id).toList());
+    if (mounted && !_cache.isBulkDownloading) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('اكتمل تحميل التلاوات ✅'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return IslamicPatternBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('القرآن الكريم'),
+          actions: [
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (v) {
+                if (v == 'download_all') _downloadAll();
+                if (v == 'free_space') _manageStorage();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'download_all',
+                  child: ListTile(
+                    leading: Icon(Icons.download_for_offline_outlined),
+                    title: Text('تحميل كل التلاوات'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'free_space',
+                  child: ListTile(
+                    leading: Icon(Icons.cleaning_services_outlined),
+                    title: Text('تفريغ المساحة'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _search,
+                textDirection: TextDirection.rtl,
+                decoration: InputDecoration(
+                  hintText: 'ابحث عن سورة...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  isDense: true,
+                ),
+              ),
+            ),
+
+            // Bulk-download progress banner
+            if (_cache.isBulkDownloading)
+              Container(
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'جارٍ تحميل التلاوات: '
+                            '${_cache.bulkDone} / ${_cache.bulkTotal}',
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          LinearProgressIndicator(
+                            value: _cache.bulkTotal == 0
+                                ? null
+                                : _cache.bulkDone / _cache.bulkTotal,
+                            minHeight: 5,
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _cache.cancelBulk,
+                      child: const Text('إيقاف',
+                          style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              ),
+
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filtered.isEmpty
+                      ? const Center(child: Text('لا توجد نتائج'))
+                      : ListView.builder(
+                          itemCount: _filtered.length,
+                          itemBuilder: (ctx, i) {
+                            final s = _filtered[i];
+                            return _SurahTile(
+                              surah: s,
+                              cache: _cache,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => SurahReaderPage(
+                                    surahs: _surahs,
+                                    initialIndex: _surahs.indexOf(s),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Surah Tile with download button ─────────────────────────────────────────
+
+class _SurahTile extends StatelessWidget {
+  final Surah surah;
+  final QuranAudioCache cache;
+  final VoidCallback onTap;
+  const _SurahTile(
+      {required this.surah, required this.cache, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final cached = cache.isCached(surah.id);
+    final downloading = cache.isDownloading(surah.id);
+    final prog = cache.progress(surah.id) ?? 0.0;
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: cs.primary.withOpacity(0.1),
+        child: Text(
+          '${surah.id}',
+          style: TextStyle(
+              color: cs.primary, fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+      ),
+      title: Text(
+        surah.name,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${surah.nameEn}  •  ${surah.versesCount} آية  •  ${surah.type == 'meccan' ? 'مكية' : 'مدنية'}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (downloading)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: LinearProgressIndicator(
+                value: prog,
+                minHeight: 3,
+                borderRadius: BorderRadius.circular(2),
+                color: cs.primary,
+                backgroundColor: cs.primary.withOpacity(0.15),
+              ),
+            ),
+        ],
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Download / cached / progress button
+          if (downloading)
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                      value: prog, strokeWidth: 2.5, color: cs.primary),
+                  Icon(Icons.download, size: 14, color: cs.primary),
+                ],
+              ),
+            )
+          else if (cached)
+            IconButton(
+              tooltip: 'محفوظ — اضغط لحذف',
+              icon: const Icon(Icons.download_done_rounded),
+              color: Colors.green,
+              onPressed: () => _confirmDelete(context),
+            )
+          else
+            IconButton(
+              tooltip: 'تحميل للاستماع بلا إنترنت',
+              icon: Icon(Icons.download_outlined, color: cs.primary),
+              onPressed: () => _startDownload(context),
+            ),
+          const Icon(Icons.chevron_left),
+        ],
+      ),
+      onTap: onTap,
+    );
+  }
+
+  void _startDownload(BuildContext context) async {
+    try {
+      await cache.download(surah.id);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل تحميل ${surah.name}')),
+        );
+      }
+    }
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('حذف ${surah.name}'),
+        content: const Text('هل تريد حذف الملف المحفوظ؟'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              cache.delete(surah.id);
+            },
+            child: const Text('حذف', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Surah Reader Page ────────────────────────────────────────────────────────
+
+class SurahReaderPage extends StatefulWidget {
+  final List<Surah> surahs;
+  final int initialIndex;
+
+  const SurahReaderPage({
+    super.key,
+    required this.surahs,
+    required this.initialIndex,
+  });
+
+  @override
+  State<SurahReaderPage> createState() => _SurahReaderPageState();
+}
+
+class _SurahReaderPageState extends State<SurahReaderPage> {
+  late int _currentIndex;
+  late PageController _pageController;
+  double _fontSize = 24;
+
+  // Audio
+  final AudioPlayer _player = AudioPlayer();
+  PlayerState? _playerState;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  bool _audioLoading = false;
+  double _speed = 1.0; // playback speed: 1x / 1.5x / 2x
+
+  // Ayah-by-ayah highlight sync
+  List<Verse>? _verses; // verses of the current surah
+  List<double>? _timings; // exact per-ayah start times (sec) if available
+  int? _activeAyah; // id of the ayah currently being recited (highlighted)
+  static final Map<int, List<double>?> _timingsCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _setupAudio();
+    _loadSurahMeta();
+  }
+
+  Future<void> _setupAudio() async {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.speech());
+    _player.playerStateStream.listen((s) {
+      if (!mounted) return;
+      setState(() => _playerState = s);
+      // When the surah finishes, remove the highlight.
+      if (s.processingState == ProcessingState.completed) {
+        _setActiveAyah(null);
+      }
+    });
+    _player.positionStream.listen((p) {
+      if (!mounted) return;
+      setState(() => _position = p);
+      _updateActiveAyah(p);
+    });
+    _player.durationStream.listen((d) {
+      if (mounted) setState(() => _duration = d ?? Duration.zero);
+    });
+  }
+
+  // Load the current surah's verses + (optional) exact ayah timings.
+  Future<void> _loadSurahMeta() async {
+    final id = _current.id;
+    final verses = await loadVerses(id);
+    final timings = await _loadTimings(id);
+    if (!mounted || id != _current.id) return;
+    setState(() {
+      _verses = verses;
+      _timings = (timings != null && timings.length == verses.length)
+          ? timings
+          : null;
+      _activeAyah = null;
+    });
+  }
+
+  // Per-ayah start times (seconds) stored at  quran_audio/<surah>.json
+  // as a JSON array, e.g. [0, 4.8, 11.2, ...]. Returns null if absent.
+  Future<List<double>?> _loadTimings(int id) async {
+    if (_timingsCache.containsKey(id)) return _timingsCache[id];
+    // Offline-first: use locally-saved timing file if the surah was downloaded
+    final local = await QuranAudioCache.instance.localTimings(id);
+    if (local != null) {
+      _timingsCache[id] = local;
+      return local;
+    }
+    // No online timing source on free plan — estimation used instead.
+    _timingsCache[id] = null;
+    return null;
+  }
+
+  // Start time (seconds) for every ayah: exact timings if uploaded,
+  // otherwise estimated from each ayah's share of the total duration
+  // (weighted by letter count) so highlighting still works.
+  List<double>? _ayahStarts() {
+    final verses = _verses;
+    if (verses == null || verses.isEmpty) return null;
+    final timings = _timings;
+    if (timings != null && timings.length == verses.length) return timings;
+    final durMs = _duration.inMilliseconds;
+    if (durMs <= 0) return null;
+    final weights =
+        verses.map((v) => v.text.replaceAll(' ', '').length).toList();
+    final total = weights.fold<int>(0, (a, b) => a + b);
+    if (total == 0) return null;
+    final dur = durMs / 1000.0;
+    final starts = <double>[];
+    int acc = 0;
+    for (final w in weights) {
+      starts.add(acc / total * dur);
+      acc += w;
+    }
+    return starts;
+  }
+
+  void _updateActiveAyah(Duration pos) {
+    final verses = _verses;
+    final starts = _ayahStarts();
+    if (verses == null || starts == null) return;
+    final t = pos.inMilliseconds / 1000.0;
+    int idx = 0;
+    for (int i = 0; i < starts.length; i++) {
+      if (t + 0.001 >= starts[i]) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    _setActiveAyah(verses[idx].id);
+  }
+
+  void _setActiveAyah(int? id) {
+    if (_activeAyah == id) return;
+    if (mounted) setState(() => _activeAyah = id);
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Surah get _current => widget.surahs[_currentIndex];
+
+  // In-memory cache of resolved Firebase Storage download URLs per surah id.
+  static final Map<int, String> _urlCache = {};
+
+  // Returns a local file path if the surah is cached on device,
+  // otherwise resolves the Firebase Storage download URL (quran_audio/<n>.mp3).
+  Future<String> _resolveAudioUrl() async {
+    final id = _current.id;
+    final localPath = QuranAudioCache.instance.localPath(id);
+    if (localPath != null) return localPath;
+    final url = QuranAudioCache.instance.remoteUrl(id);
+    _urlCache[id] = url;
+    return url;
+  }
+
+  Future<void> _playPause() async {
+    if (_player.playing) {
+      await _player.pause();
+      return;
+    }
+    if (_playerState?.processingState == ProcessingState.idle ||
+        _playerState == null) {
+      setState(() => _audioLoading = true);
+      try {
+        final url = await _resolveAudioUrl();
+        await _player.setUrl(url);
+        await _player.setSpeed(_speed);
+        setState(() => _audioLoading = false);
+      } catch (e) {
+        setState(() => _audioLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذر تحميل الصوت')),
+          );
+        }
+        return;
+      }
+    }
+    await _player.play();
+  }
+
+  Future<void> _stopAudio() async {
+    await _player.stop();
+    _setActiveAyah(null);
+  }
+
+  // Cycles playback speed 1x → 1.5x → 2x → 1x.
+  Future<void> _cycleSpeed() async {
+    final next = _speed == 1.0
+        ? 1.5
+        : _speed == 1.5
+            ? 2.0
+            : 1.0;
+    setState(() => _speed = next);
+    try {
+      await _player.setSpeed(next);
+    } catch (_) {}
+  }
+
+  String get _speedLabel =>
+      _speed == 1.0 ? '1x' : (_speed == 1.5 ? '1.5x' : '2x');
+
+  void _goTo(int index) {
+    if (index < 0 || index >= widget.surahs.length) return;
+    _stopAudio();
+    setState(() => _currentIndex = index);
+    _loadSurahMeta();
+    _pageController.animateToPage(index,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  }
+
+  String _fmt(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isPlaying = _player.playing;
+    final isDone =
+        _playerState?.processingState == ProcessingState.completed;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_current.name),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.text_decrease),
+            onPressed: () =>
+                setState(() => _fontSize = (_fontSize - 2).clamp(16, 36)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.text_increase),
+            onPressed: () =>
+                setState(() => _fontSize = (_fontSize + 2).clamp(16, 36)),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Audio bar — kept compact so more Quran lines stay visible
+          Container(
+            color: cs.primary.withOpacity(0.08),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: _currentIndex > 0
+                          ? () => _goTo(_currentIndex - 1)
+                          : null,
+                      icon: const Icon(Icons.skip_next, size: 24),
+                    ),
+                    const SizedBox(width: 4),
+                    _audioLoading
+                        ? const SizedBox(
+                            width: 34,
+                            height: 34,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : IconButton(
+                            iconSize: 34,
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: isDone
+                                ? () async {
+                                    await _player.seek(Duration.zero);
+                                    await _player.play();
+                                  }
+                                : _playPause,
+                            icon: Icon(
+                              isDone
+                                  ? Icons.replay
+                                  : isPlaying
+                                      ? Icons.pause_circle_filled
+                                      : Icons.play_circle_filled,
+                              color: cs.primary,
+                            ),
+                          ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: _stopAudio,
+                        icon: const Icon(Icons.stop, size: 22)),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: _currentIndex < widget.surahs.length - 1
+                          ? () => _goTo(_currentIndex + 1)
+                          : null,
+                      icon: const Icon(Icons.skip_previous, size: 24),
+                    ),
+                    const SizedBox(width: 6),
+                    // Playback speed (1x / 1.5x / 2x)
+                    GestureDetector(
+                      onTap: _cycleSpeed,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: cs.primary.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _speedLabel,
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: cs.primary),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'الشيخ أحمد الدباغ',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.onSurface.withOpacity(0.6),
+                            ),
+                          ),
+                          Text('${_fmt(_position)} / ${_fmt(_duration)}',
+                              style: const TextStyle(fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (_duration.inSeconds > 0)
+                  SliderCompact(
+                    position: _position,
+                    duration: _duration,
+                    color: cs.primary,
+                    onSeek: (s) => _player.seek(Duration(seconds: s)),
+                  ),
+              ],
+            ),
+          ),
+
+          // Navigation — next (←) on LEFT, previous (→) on RIGHT (Arabic book convention)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // RIGHT side in RTL → previous surah (Fatiha side)
+              TextButton.icon(
+                onPressed: _currentIndex > 0
+                    ? () => _goTo(_currentIndex - 1)
+                    : null,
+                icon: const Icon(Icons.arrow_back_ios, size: 14),
+                label: Text(
+                  _currentIndex > 0
+                      ? widget.surahs[_currentIndex - 1].name
+                      : '',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+              Text(
+                '${_currentIndex + 1} / ${widget.surahs.length}',
+                style: TextStyle(
+                    color: cs.onSurface.withOpacity(0.5), fontSize: 13),
+              ),
+              // LEFT side in RTL → next surah (Al-Imran side)
+              TextButton.icon(
+                onPressed: _currentIndex < widget.surahs.length - 1
+                    ? () => _goTo(_currentIndex + 1)
+                    : null,
+                icon: const Icon(Icons.arrow_forward_ios, size: 14),
+                label: Text(
+                  _currentIndex < widget.surahs.length - 1
+                      ? widget.surahs[_currentIndex + 1].name
+                      : '',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+
+          const Divider(height: 1),
+
+          // PageView: reverse:true = next surah (higher index) is to the LEFT
+          // Swipe RIGHT → next surah enters from LEFT (like Arabic book)
+          // Swipe LEFT  → previous surah enters from RIGHT
+          Expanded(
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: PageView.builder(
+                controller: _pageController,
+                reverse: true,
+                itemCount: widget.surahs.length,
+                onPageChanged: (i) {
+                  _stopAudio();
+                  setState(() => _currentIndex = i);
+                  _loadSurahMeta();
+                },
+                itemBuilder: (_, i) => _SurahContent(
+                  surah: widget.surahs[i],
+                  fontSize: _fontSize,
+                  activeAyah: i == _currentIndex ? _activeAyah : null,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Surah Content — lazy-loads verses, virtualized list ─────────────────────
+
+class _SurahContent extends StatefulWidget {
+  final Surah surah;
+  final double fontSize;
+
+  /// Id of the ayah currently being recited — highlighted and scrolled to.
+  final int? activeAyah;
+
+  const _SurahContent({
+    required this.surah,
+    required this.fontSize,
+    this.activeAyah,
+  });
+
+  @override
+  State<_SurahContent> createState() => _SurahContentState();
+}
+
+class _SurahContentState extends State<_SurahContent> {
+  List<Verse>? _verses;
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_SurahContent old) {
+    super.didUpdateWidget(old);
+    if (old.surah.id != widget.surah.id) _load();
+    // Keep the reciting ayah in view (proportional auto-scroll).
+    if (widget.activeAyah != null && widget.activeAyah != old.activeAyah) {
+      _scrollToActive();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final verses = await loadVerses(widget.surah.id);
+    if (mounted) setState(() => _verses = verses);
+  }
+
+  // Estimate the active ayah's position from its cumulative share of the
+  // surah's letters and scroll it toward the upper third of the screen.
+  void _scrollToActive() {
+    final verses = _verses;
+    final active = widget.activeAyah;
+    if (verses == null || active == null) return;
+    int total = 0;
+    int before = 0;
+    for (final v in verses) {
+      final len = v.text.length;
+      if (v.id < active) before += len;
+      total += len;
+    }
+    if (total == 0) return;
+    final frac = before / total;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      final target = _scroll.position.maxScrollExtent * frac - 80;
+      _scroll.animateTo(
+        target.clamp(0.0, _scroll.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+
+    if (_verses == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final baseStyle = TextStyle(
+      fontFamily: 'ScheherazadeNew',
+      fontSize: widget.fontSize,
+      height: 2.2,
+      color: cs.onSurface,
+    );
+    final highlightBg = cs.primary.withOpacity(isDark ? 0.34 : 0.16);
+
+    // One flowing paragraph; the reciting ayah is highlighted inline.
+    final spans = <TextSpan>[
+      for (final v in _verses!)
+        TextSpan(
+          text: '${v.text} ﴿${v.id}﴾  ',
+          style: widget.activeAyah == v.id
+              ? baseStyle.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w600,
+                  background: Paint()..color = highlightBg,
+                )
+              : baseStyle,
+        ),
+    ];
+
+    return SingleChildScrollView(
+      controller: _scroll,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Basmalah / surah header
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(50),
+                    border:
+                        Border.all(color: cs.primary.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    widget.surah.id != 9
+                        ? 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'
+                        : widget.surah.name,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'ScheherazadeNew',
+                      fontSize: widget.fontSize,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${widget.surah.nameEn}  —  ${widget.surah.versesCount} آية',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurface.withOpacity(0.5)),
+                ),
+              ],
+            ),
+          ),
+          // Continuous flowing text — true straight-line Mushaf style
+          Text.rich(
+            TextSpan(children: spans),
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.justify,
+          ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+}
+
+// A thin seek bar that takes far less vertical space than the default Slider,
+// so more Quran text stays visible (especially in landscape).
+class SliderCompact extends StatelessWidget {
+  final Duration position;
+  final Duration duration;
+  final Color color;
+  final void Function(int seconds) onSeek;
+  const SliderCompact({
+    super.key,
+    required this.position,
+    required this.duration,
+    required this.color,
+    required this.onSeek,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final max = duration.inSeconds.toDouble();
+    final val = position.inSeconds.clamp(0, duration.inSeconds).toDouble();
+    return SliderTheme(
+      data: SliderThemeData(
+        trackHeight: 2,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+        activeTrackColor: color,
+        thumbColor: color,
+      ),
+      child: SizedBox(
+        height: 22,
+        child: Slider(
+          value: val,
+          max: max <= 0 ? 1 : max,
+          onChanged: (v) => onSeek(v.toInt()),
+        ),
+      ),
+    );
+  }
+}
