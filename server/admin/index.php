@@ -365,9 +365,46 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $flash = 'تم حذف الصورة من السلايدر';
     }
 
+    if ($action === 'trigger_build') {
+        $cur   = read_version();
+        $ver   = trim($_POST['version'] ?? $cur['version']);
+        $build = max(1, (int)($_POST['build'] ?? ((int)$cur['build'] + 1)));
+        $pending = [
+            'version'   => $ver !== '' ? $ver : $cur['version'],
+            'build'     => $build,
+            'notes'     => trim($_POST['notes'] ?? ''),
+            'mandatory' => isset($_POST['mandatory']),
+            'notify'    => isset($_POST['notify']),
+            'requested' => date('c'),
+        ];
+        $serverRoot = dirname(__DIR__);
+        $ok = @file_put_contents(
+            $serverRoot . '/pending_build.json',
+            json_encode($pending, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+        );
+        @file_put_contents($serverRoot . '/build_status.json', json_encode([
+            'status'  => 'pending',
+            'message' => 'في انتظار الخادم المحلي لبدء البناء...',
+            'updated' => date('c'),
+        ]));
+        $flash = $ok !== false
+            ? '✅ تم إرسال طلب البناء — سيبدأ الخادم المحلي خلال دقيقة.'
+            : '❌ تعذّر حفظ ملف الطلب (تحقق من صلاحيات الكتابة).';
+    }
+
+    if ($action === 'cancel_build') {
+        $serverRoot = dirname(__DIR__);
+        @unlink($serverRoot . '/pending_build.json');
+        @file_put_contents($serverRoot . '/build_status.json', json_encode([
+            'status'  => 'cancelled',
+            'message' => 'تم إلغاء طلب البناء.',
+            'updated' => date('c'),
+        ]));
+        $flash = 'تم إلغاء طلب البناء.';
+    }
+
     if ($action === 'publish_release') {
         $cur = read_version();
-        // Keep the old APK url unless a new file was uploaded successfully.
         $url = $cur['url'];
         $uploadErr = '';
         if (!empty($_FILES['apk']['name'])) {
@@ -680,56 +717,111 @@ $tab = $_GET['tab'] ?? 'events';
     <?php endforeach; ?>
 
   <?php elseif ($tab === 'release'):
-      $ver = read_version();
-      $apkExists = is_file(dirname(__DIR__) . '/app-release.apk');
-      $apkSize = $apkExists ? filesize(dirname(__DIR__) . '/app-release.apk') : 0; ?>
-    <div class="card">
-      <h3 style="margin-top:0">🚀 نشر إصدار جديد للتطبيق</h3>
-      <p class="muted">
-        لا يمكن <b>بناء</b> ملف APK على الاستضافة — البناء يتم على جهازك بالأمر
-        <code>flutter build apk --release</code>. هنا تقوم برفع الملف الناتج
-        ونشر رقم الإصدار، فيظهر لكل المستخدمين إشعار «تحديث متوفر» ويحمّلونه من
-        الموقع مباشرة.
-      </p>
-      <div style="background:#eef3fb;padding:10px 12px;border-radius:10px;font-size:14px">
-        <b>الإصدار الحالي:</b> <?= h($ver['version']) ?> (build <?= h($ver['build']) ?>)<br>
-        <b>ملف APK:</b>
-        <?php if ($apkExists): ?>
-          موجود (<?= number_format($apkSize / 1048576, 1) ?> ميجا) —
-          <a href="../app-release.apk" target="_blank">تحميل</a>
-        <?php else: ?>
-          <span style="color:#c62828">لا يوجد — ارفع ملفاً أدناه</span>
-        <?php endif; ?>
+      $ver        = read_version();
+      $serverRoot = dirname(__DIR__);
+      $apkExists  = is_file($serverRoot . '/app-release.apk');
+      $apkSize    = $apkExists ? filesize($serverRoot . '/app-release.apk') : 0;
+      $pendingRaw = @file_get_contents($serverRoot . '/pending_build.json');
+      $pending    = $pendingRaw ? json_decode($pendingRaw, true) : null;
+      $statusRaw  = @file_get_contents($serverRoot . '/build_status.json');
+      $bstatus    = $statusRaw ? json_decode($statusRaw, true) : null;
+      $bstate     = $bstatus['status'] ?? '';
+      $isActive   = in_array($bstate, ['pending','building'], true); ?>
+
+    <?php if ($isActive): ?>
+      <meta http-equiv="refresh" content="8">
+    <?php endif; ?>
+
+    <?php if ($bstatus): ?>
+    <?php
+      $stColors = ['pending'=>'#b45309','building'=>'#1d4ed8','done'=>'#166534',
+                   'failed'=>'#991b1b','cancelled'=>'#374151'];
+      $stIcons  = ['pending'=>'⏳','building'=>'🔨','done'=>'✅',
+                   'failed'=>'❌','cancelled'=>'🚫'];
+      $sc = $stColors[$bstate] ?? '#374151';
+      $si = $stIcons[$bstate]  ?? '•';
+    ?>
+    <div class="card" style="border-right:4px solid <?= $sc ?>">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:18px;font-weight:bold;color:<?= $sc ?>">
+          <?= $si ?> <?= h($bstatus['message'] ?? $bstate) ?>
+        </span>
+        <span class="muted" style="font-size:12px"><?= h($bstatus['updated'] ?? '') ?></span>
       </div>
-      <form method="post" enctype="multipart/form-data" style="margin-top:12px"
-            onsubmit="this.querySelector('button').disabled=true;
-                      this.querySelector('button').textContent='جارٍ الرفع... قد يستغرق دقائق';">
-        <input type="hidden" name="action" value="publish_release">
-        <label>ملف التطبيق (app-release.apk)</label>
-        <input type="file" name="apk" accept=".apk">
-        <label>رقم الإصدار (version) مثال: 1.0.2</label>
-        <input name="version" value="<?= h($ver['version']) ?>" required>
-        <label>رقم البناء (build) — رقم يزيد مع كل إصدار</label>
-        <input type="number" name="build" value="<?= h((int)$ver['build'] + 1) ?>" min="1" required>
-        <label>ملاحظات التحديث (تظهر للمستخدم)</label>
-        <textarea name="notes" rows="2" placeholder="ما الجديد في هذا الإصدار..."><?= h($ver['notes']) ?></textarea>
-        <label><input type="checkbox" name="mandatory" style="width:auto"
-               <?= !empty($ver['mandatory']) ? 'checked' : '' ?>> تحديث إجباري (يمنع استخدام النسخة القديمة)</label><br>
-        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار «تحديث متوفر» لكل المستخدمين</label><br><br>
-        <button>نشر الإصدار</button>
-      </form>
-      <p class="muted">
-        حد الرفع مرفوع إلى ٢٠٠ ميجا عبر ملف <code>.user.ini</code> المرفق، فيكفي
-        لملف بحجم ٦٠ ميجا. إذا بقي الخطأ بعد دقائق، ارفع
-        <code>upload_max_filesize</code> و <code>post_max_size</code> من لوحة
-        Hostinger ‹ <b>PHP Configuration</b>.
-        <br><br>
-        لتصغير الحجم: ابنِ نسخاً منفصلة لكل معالج بالأمر
-        <code>flutter build apk --split-per-abi</code> وارفع ملف
-        <code>app-arm64-v8a-release.apk</code> (حوالي ٢٠ ميجا، يعمل على معظم
-        الهواتف الحديثة).
-      </p>
+      <?php if ($isActive): ?>
+        <p class="muted" style="margin:8px 0 0">يتجدد هذا الصفحة تلقائياً كل ٨ ثوانٍ…</p>
+        <form method="post" style="margin-top:8px">
+          <input type="hidden" name="action" value="cancel_build">
+          <button class="danger">إلغاء البناء</button>
+        </form>
+      <?php elseif ($bstate === 'done'): ?>
+        <?php $dv = $bstatus['version'] ?? ''; $db = $bstatus['build'] ?? ''; ?>
+        <p style="margin:6px 0 0">الإصدار <?= h($dv) ?> (build <?= h($db) ?>) جاهز
+          <?php if ($apkExists): ?>— <a href="../app-release.apk" target="_blank">تحميل APK</a><?php endif; ?>
+        </p>
+      <?php endif; ?>
     </div>
+    <?php endif; ?>
+
+    <div class="card">
+      <b>الإصدار الحالي:</b> <?= h($ver['version']) ?> (build <?= h($ver['build']) ?>)<br>
+      <b>ملف APK على الخادم:</b>
+      <?php if ($apkExists): ?>
+        <?= number_format($apkSize/1048576,1) ?> ميجا —
+        <a href="../app-release.apk" target="_blank">تحميل</a>
+      <?php else: ?>
+        <span style="color:#c62828">غير موجود</span>
+      <?php endif; ?>
+    </div>
+
+    <?php if (!$isActive): ?>
+    <div class="card">
+      <h3 style="margin-top:0">🔨 بناء إصدار جديد تلقائياً (عبر الخادم المحلي)</h3>
+      <p class="muted">
+        اضغط «طلب البناء» — سيتلقى الخادم المحلي الطلب خلال دقيقة، يسحب
+        الكود من GitHub، يبني APK جديد، يرفعه هنا، ويُرسل إشعار التحديث
+        لجميع المستخدمين تلقائياً.
+      </p>
+      <form method="post">
+        <input type="hidden" name="action" value="trigger_build">
+        <label>رقم الإصدار (مثال: 1.0.2)</label>
+        <input name="version" value="<?= h($ver['version']) ?>" required>
+        <label>رقم البناء (يزيد مع كل إصدار)</label>
+        <input type="number" name="build" value="<?= h((int)$ver['build']+1) ?>" min="1" required>
+        <label>ملاحظات التحديث (تظهر للمستخدم)</label>
+        <textarea name="notes" rows="2" placeholder="ما الجديد في هذا الإصدار..."><?= h($ver['notes'] ?? '') ?></textarea>
+        <label><input type="checkbox" name="mandatory" style="width:auto"
+          <?= !empty($ver['mandatory']) ? 'checked' : '' ?>> تحديث إجباري</label><br>
+        <label><input type="checkbox" name="notify" checked style="width:auto">
+          🔔 إشعار «تحديث متوفر» لكل المستخدمين</label><br><br>
+        <button style="background:#1b7a4b">🔨 طلب البناء</button>
+      </form>
+    </div>
+
+    <details>
+      <summary style="cursor:pointer;color:#5a6b88;padding:10px 0">
+        📦 رفع يدوي (إذا كان الخادم المحلي غير متاح)
+      </summary>
+      <div class="card" style="margin-top:8px">
+        <form method="post" enctype="multipart/form-data"
+              onsubmit="this.querySelector('button').disabled=true;
+                        this.querySelector('button').textContent='جارٍ الرفع...'">
+          <input type="hidden" name="action" value="publish_release">
+          <label>ملف APK</label>
+          <input type="file" name="apk" accept=".apk">
+          <label>رقم الإصدار</label>
+          <input name="version" value="<?= h($ver['version']) ?>" required>
+          <label>رقم البناء</label>
+          <input type="number" name="build" value="<?= h((int)$ver['build']+1) ?>" min="1" required>
+          <label>ملاحظات</label>
+          <textarea name="notes" rows="2"><?= h($ver['notes'] ?? '') ?></textarea>
+          <label><input type="checkbox" name="mandatory" style="width:auto"> إجباري</label><br>
+          <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إشعار</label><br><br>
+          <button>رفع ونشر</button>
+        </form>
+      </div>
+    </details>
+    <?php endif; ?>
 
   <?php elseif ($tab === 'notify'): ?>
     <div class="card">

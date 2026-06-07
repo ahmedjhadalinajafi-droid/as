@@ -4,3 +4,5 @@ service-account.json
 # Don't commit uploaded images (keep the folder + its .htaccess)
 uploads/*
 !uploads/.htaccess
+pending_build.json
+build_status.json
