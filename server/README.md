@@ -50,15 +50,28 @@ static const String secret  = 'the SAME API_SECRET as config.php';
 Rebuild the app. That's it — questions now push to admins, answers push to the
 asker, and images upload to your domain.
 
-## 5. (Optional) Update alerts + APK
+## 5. Releasing a new version (APK) — from the web panel
 
-1. Build the APK: `flutter build apk --release`
-2. Upload `app-release.apk` to your site (e.g. next to `version.json`)
-3. Edit `version.json`: bump `build` to match `pubspec.yaml` (`1.0.1+2` → build `2`)
-   and set `url` to the APK link.
+You **build** the APK on your computer (Hostinger can't compile Flutter), then
+**publish** it from the panel:
 
-When you later release a new build, raise `build` in `version.json` and the app
-shows an "update available" dialog on launch.
+1. On your Mac/PC: `flutter build apk --release`
+   (the file lands in `build/app/outputs/flutter-apk/app-release.apk`)
+2. Open the admin panel → **إصدار التطبيق** tab
+3. Choose the `app-release.apk` file, set the **version** (e.g. `1.0.2`) and
+   bump the **build** number, write release notes, and press **نشر الإصدار**.
+4. Leave **🔔 إرسال إشعار** checked to push an "update available" alert to
+   everyone.
+
+The panel saves the APK to your site root and rewrites `version.json`
+automatically, so the app's launch check offers the new download.
+
+> **Big APK?** If you see "حجم الملف أكبر من الحد المسموح", raise
+> `upload_max_filesize` and `post_max_size` in hPanel → **PHP Configuration**
+> to a value larger than the APK (e.g. 128M), then retry. A release APK is
+> usually 20–40 MB, which is under Hostinger's default.
+
+You can still edit `version.json` by hand if you prefer.
 
 ## 6. Web admin panel
 

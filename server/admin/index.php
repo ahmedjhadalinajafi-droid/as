@@ -70,6 +70,46 @@ function admin_save_audio(string $field): string {
     return upload_public_url($name);
 }
 
+// Saves an uploaded Android APK to the server root as app-release.apk and
+// returns its public URL, or '' on failure. APKs are ZIP files, so we verify
+// the "PK" signature instead of trusting the extension alone.
+function admin_save_apk(string $field): string {
+    if (empty($_FILES[$field]) || $_FILES[$field]['error'] !== UPLOAD_ERR_OK) {
+        return '';
+    }
+    $ext = strtolower(pathinfo($_FILES[$field]['name'] ?? '', PATHINFO_EXTENSION));
+    if ($ext !== 'apk') return '';
+    $fh = @fopen($_FILES[$field]['tmp_name'], 'rb');
+    if ($fh === false) return '';
+    $magic = fread($fh, 2);
+    fclose($fh);
+    if ($magic !== 'PK') return ''; // not a valid zip/apk
+    // Save at the server root (one level above admin/), matching version.json url.
+    $dest = dirname(__DIR__) . '/app-release.apk';
+    if (!move_uploaded_file($_FILES[$field]['tmp_name'], $dest)) return '';
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $dir    = rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'])), '/');
+    return "$scheme://$host$dir/app-release.apk";
+}
+
+// Path to the version manifest the app checks for updates.
+function version_file(): string { return dirname(__DIR__) . '/version.json'; }
+
+// Reads the current version.json (or sensible defaults).
+function read_version(): array {
+    $raw = @file_get_contents(version_file());
+    $v = $raw ? json_decode($raw, true) : null;
+    if (!is_array($v)) $v = [];
+    return $v + [
+        'version'   => '1.0.0',
+        'build'     => 1,
+        'url'       => '',
+        'mandatory' => false,
+        'notes'     => '',
+    ];
+}
+
 // Sends a broadcast push to all app users. Never throws — push failures
 // should not block content from being saved. Returns 'ok' on success or a
 // short diagnostic string describing what went wrong.
@@ -98,6 +138,16 @@ function fs_flash(array $res, string $okMsg): string {
 $flash = '';
 if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    // When an upload is bigger than the server's post_max_size, PHP discards
+    // the whole body so $_POST/$_FILES come back empty. Detect that and tell
+    // the admin to raise the limit instead of failing silently.
+    if ($action === '' && empty($_FILES)
+        && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+        $flash = '❌ حجم الملف أكبر من الحد المسموح في الاستضافة. ارفع الحد من '
+            . 'لوحة Hostinger ‹ PHP Configuration › upload_max_filesize و '
+            . 'post_max_size إلى حجم أكبر من حجم الـ APK، ثم أعد المحاولة.';
+    }
 
     if ($action === 'add_event') {
         $img = admin_save_image('image');
@@ -314,6 +364,54 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         fs_delete('home_slider', $_POST['id']);
         $flash = 'تم حذف الصورة من السلايدر';
     }
+
+    if ($action === 'publish_release') {
+        $cur = read_version();
+        // Keep the old APK url unless a new file was uploaded successfully.
+        $url = $cur['url'];
+        $uploadErr = '';
+        if (!empty($_FILES['apk']['name'])) {
+            $saved = admin_save_apk('apk');
+            if ($saved === '') {
+                $uploadErr = 'تعذّر رفع ملف الـ APK (تأكد أنه ملف .apk صالح وأن '
+                    . 'حد الرفع في الاستضافة يكفي لحجمه).';
+            } else {
+                $url = $saved;
+            }
+        }
+        if ($uploadErr) {
+            $flash = '❌ ' . $uploadErr;
+        } else {
+            $version = trim($_POST['version'] ?? $cur['version']);
+            $build   = (int)($_POST['build'] ?? $cur['build']);
+            $notes   = trim($_POST['notes'] ?? '');
+            $data = [
+                'version'   => $version !== '' ? $version : $cur['version'],
+                'build'     => $build > 0 ? $build : $cur['build'],
+                'url'       => $url,
+                'mandatory' => isset($_POST['mandatory']),
+                'notes'     => $notes !== '' ? $notes
+                    : 'أحدث إصدار من تطبيق مسجد وحسينية أهل البيت',
+            ];
+            $ok = @file_put_contents(
+                version_file(),
+                json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+            );
+            if ($ok === false) {
+                $flash = '❌ تعذّر حفظ version.json (تحقق من صلاحيات الكتابة على المجلد).';
+            } else {
+                $flash = '✅ تم نشر الإصدار ' . h($data['version'])
+                    . ' (build ' . $data['build'] . ')';
+                if (isset($_POST['notify'])) {
+                    $r = broadcast_push('تحديث متوفر 🚀',
+                        'إصدار جديد من التطبيق متوفر الآن — اضغط للتحديث', 'home');
+                    $flash .= $r === 'ok'
+                        ? ' — وأُرسل إشعار التحديث'
+                        : ' — لكن فشل إرسال الإشعار: ' . h($r);
+                }
+            }
+        }
+    }
 }
 
 function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
@@ -397,6 +495,7 @@ $tab = $_GET['tab'] ?? 'events';
     <a href="?tab=slider" class="<?= $tab==='slider'?'active':'' ?>">معرض الصور</a>
     <a href="?tab=quran" class="<?= $tab==='quran'?'active':'' ?>">القرآن</a>
     <a href="?tab=notify" class="<?= $tab==='notify'?'active':'' ?>">الإشعارات</a>
+    <a href="?tab=release" class="<?= $tab==='release'?'active':'' ?>">إصدار التطبيق</a>
   </div>
   <?php if ($flash): ?><div class="flash"><?= h($flash) ?></div><?php endif; ?>
   <div class="wrap">
@@ -579,6 +678,53 @@ $tab = $_GET['tab'] ?? 'events';
         <?php endif; ?>
       </div>
     <?php endforeach; ?>
+
+  <?php elseif ($tab === 'release'):
+      $ver = read_version();
+      $apkExists = is_file(dirname(__DIR__) . '/app-release.apk');
+      $apkSize = $apkExists ? filesize(dirname(__DIR__) . '/app-release.apk') : 0; ?>
+    <div class="card">
+      <h3 style="margin-top:0">🚀 نشر إصدار جديد للتطبيق</h3>
+      <p class="muted">
+        لا يمكن <b>بناء</b> ملف APK على الاستضافة — البناء يتم على جهازك بالأمر
+        <code>flutter build apk --release</code>. هنا تقوم برفع الملف الناتج
+        ونشر رقم الإصدار، فيظهر لكل المستخدمين إشعار «تحديث متوفر» ويحمّلونه من
+        الموقع مباشرة.
+      </p>
+      <div style="background:#eef3fb;padding:10px 12px;border-radius:10px;font-size:14px">
+        <b>الإصدار الحالي:</b> <?= h($ver['version']) ?> (build <?= h($ver['build']) ?>)<br>
+        <b>ملف APK:</b>
+        <?php if ($apkExists): ?>
+          موجود (<?= number_format($apkSize / 1048576, 1) ?> ميجا) —
+          <a href="../app-release.apk" target="_blank">تحميل</a>
+        <?php else: ?>
+          <span style="color:#c62828">لا يوجد — ارفع ملفاً أدناه</span>
+        <?php endif; ?>
+      </div>
+      <form method="post" enctype="multipart/form-data" style="margin-top:12px"
+            onsubmit="this.querySelector('button').disabled=true;
+                      this.querySelector('button').textContent='جارٍ الرفع... قد يستغرق دقائق';">
+        <input type="hidden" name="action" value="publish_release">
+        <label>ملف التطبيق (app-release.apk)</label>
+        <input type="file" name="apk" accept=".apk">
+        <label>رقم الإصدار (version) مثال: 1.0.2</label>
+        <input name="version" value="<?= h($ver['version']) ?>" required>
+        <label>رقم البناء (build) — رقم يزيد مع كل إصدار</label>
+        <input type="number" name="build" value="<?= h((int)$ver['build'] + 1) ?>" min="1" required>
+        <label>ملاحظات التحديث (تظهر للمستخدم)</label>
+        <textarea name="notes" rows="2" placeholder="ما الجديد في هذا الإصدار..."><?= h($ver['notes']) ?></textarea>
+        <label><input type="checkbox" name="mandatory" style="width:auto"
+               <?= !empty($ver['mandatory']) ? 'checked' : '' ?>> تحديث إجباري (يمنع استخدام النسخة القديمة)</label><br>
+        <label><input type="checkbox" name="notify" checked style="width:auto"> 🔔 إرسال إشعار «تحديث متوفر» لكل المستخدمين</label><br><br>
+        <button>نشر الإصدار</button>
+      </form>
+      <p class="muted">
+        إذا ظهر خطأ أن حجم الملف كبير، ارفع
+        <code>upload_max_filesize</code> و <code>post_max_size</code> من لوحة
+        Hostinger ‹ <b>PHP Configuration</b> إلى قيمة أكبر من حجم الـ APK
+        (مثلاً 128M).
+      </p>
+    </div>
 
   <?php elseif ($tab === 'notify'): ?>
     <div class="card">
