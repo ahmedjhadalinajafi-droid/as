@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 import 'photo_viewer.dart';
 
 const _navy = Color(0xFF1B3D6F);
@@ -441,10 +442,10 @@ class _EventCard extends StatelessWidget {
                                         docId: docId, initial: data),
                                   ),
                                 ),
-                                child: const Padding(
-                                  padding: EdgeInsets.only(right: 4, left: 4),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 4, left: 4),
                                   child: Icon(Icons.edit_outlined,
-                                      color: _navy, size: 19),
+                                      color: brandColor(context), size: 19),
                                 ),
                               ),
                               GestureDetector(
@@ -841,7 +842,7 @@ class _AddEventPageState extends State<_AddEventPage> {
                       labelText: 'التاريخ والوقت',
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
-                      prefixIcon: const Icon(Icons.event, color: _navy),
+                      prefixIcon: Icon(Icons.event, color: brandColor(context)),
                     ),
                     child: Text(
                       _date == null

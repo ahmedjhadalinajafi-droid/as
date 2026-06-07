@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -290,7 +291,7 @@ class _MafatihPageState extends State<MafatihPage>
                 decoration: InputDecoration(
                   hintText: 'ابحث في مفاتيح الجنان...',
                   hintStyle: const TextStyle(fontFamily: 'ScheherazadeNew'),
-                  prefixIcon: const Icon(Icons.search, color: _navy),
+                  prefixIcon: Icon(Icons.search, color: brandColor(context)),
                   filled: true,
                   fillColor: isDark
                       ? const Color(0xFF1E2D4A)
@@ -392,18 +393,18 @@ class _MafatihPageState extends State<MafatihPage>
 
           // ── Body ─────────────────────────────────────────────────────
           if (_loading)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(color: _gold),
-                    SizedBox(height: 16),
+                    const CircularProgressIndicator(color: _gold),
+                    const SizedBox(height: 16),
                     Text(
                       'جاري تحميل مفاتيح الجنان...',
                       style: TextStyle(
                         fontFamily: 'ScheherazadeNew',
-                        color: _navy,
+                        color: brandColor(context),
                         fontSize: 16,
                       ),
                     ),

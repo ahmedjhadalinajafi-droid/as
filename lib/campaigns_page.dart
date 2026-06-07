@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -357,7 +358,7 @@ class _TripCard extends StatelessWidget {
                             icon: Icons.event_seat,
                             label: 'المقاعد المتبقية',
                             value: seats,
-                            color: _navy,
+                            color: brandColor(context),
                           ),
                         ),
                     ],
@@ -466,7 +467,7 @@ class _ContactRow extends StatelessWidget {
           // Call button
           _ContactBtn(
             icon: Icons.phone_rounded,
-            color: _navy,
+            color: brandColor(context),
             onTap: onCall,
           ),
         ],

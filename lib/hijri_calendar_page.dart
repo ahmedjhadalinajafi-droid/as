@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 
 // ─── Islamic Occasions ────────────────────────────────────────────────────────
 
@@ -288,18 +289,18 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                                 children: [
                                   Text(
                                     '${selectedH.hDay}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 36,
                                       fontWeight: FontWeight.bold,
-                                      color: navy,
+                                      color: brandColor(context),
                                       height: 1,
                                     ),
                                   ),
                                   Text(
                                     '${_hijriMonthNames[selectedH.hMonth - 1]} ${selectedH.hYear} هـ',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 13,
-                                      color: navy,
+                                      color: brandColor(context),
                                       fontFamily: 'ScheherazadeNew',
                                     ),
                                   ),
@@ -518,15 +519,15 @@ class _HijriCalendarPageState extends State<HijriCalendarPage> {
                                 'assets/images/logo.png',
                                 height: 18,
                                 errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.mosque, size: 16, color: Color(0xFF1B3D6F)),
+                                    Icon(Icons.mosque, size: 16, color: brandColor(context)),
                               ),
                               const SizedBox(width: 6),
                               Text(
                                 'مناسبات شهر ${_hijriMonthNames[hm - 1]}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15,
-                                  color: Color(0xFF1B3D6F),
+                                  color: brandColor(context),
                                 ),
                               ),
                             ],

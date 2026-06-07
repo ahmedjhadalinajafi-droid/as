@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 import 'photo_viewer.dart';
 
 const _navy = Color(0xFF1B3D6F);
@@ -434,10 +435,10 @@ class _TripCard extends StatelessWidget {
                                   _AddTripPage(docId: docId, initial: data),
                             ),
                           ),
-                          child: const Padding(
-                            padding: EdgeInsets.only(right: 4, left: 4),
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 4, left: 4),
                             child: Icon(Icons.edit_outlined,
-                                color: _navy, size: 19),
+                                color: brandColor(context), size: 19),
                           ),
                         ),
                         GestureDetector(
@@ -616,7 +617,7 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = highlight ? _gold : _navy;
+    final color = highlight ? _gold : brandColor(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -979,7 +980,7 @@ class _AddTripPageState extends State<_AddTripPage> {
                       labelText: 'موعد الانطلاق',
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
-                      prefixIcon: const Icon(Icons.event, color: _navy),
+                      prefixIcon: Icon(Icons.event, color: brandColor(context)),
                     ),
                     child: Text(
                       _date == null

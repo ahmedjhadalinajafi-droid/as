@@ -25,6 +25,7 @@ import 'events_page.dart';
 import 'trips_page.dart';
 import 'hijri_calendar_page.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 import 'mafatih_page.dart';
 import 'notification_service.dart';
 import 'prayer_times_page.dart';
@@ -1858,8 +1859,8 @@ class _DayWorshipTabs extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                     label,
-                    style: const TextStyle(
-                      color: _navy,
+                    style: TextStyle(
+                      color: brandColor(context),
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'ScheherazadeNew',

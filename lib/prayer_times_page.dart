@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_service.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 
 class PrayerTimesPage extends StatefulWidget {
   const PrayerTimesPage({super.key});
@@ -438,9 +439,7 @@ class _PrayerTimesPageState extends State<PrayerTimesPage> {
                                       style: TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.bold,
-                                          color: cs.brightness == Brightness.dark
-                                              ? Colors.white
-                                              : _navy),
+                                          color: brandColor(context)),
                                     ),
                                   ],
                                 ),

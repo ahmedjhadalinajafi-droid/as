@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hijri/hijri_calendar.dart';
 import 'package:intl/intl.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 
 const _navy = Color(0xFF1B3D6F);
 const _gold = Color(0xFFC9A843);
@@ -103,9 +104,9 @@ class _DateConverterPageState extends State<DateConverterPage> {
               ),
               child: Row(
                 children: [
-                  _toggleBtn('ميلادي ← هجري', !_hijriToGreg,
+                  _toggleBtn(context, 'ميلادي ← هجري', !_hijriToGreg,
                       () => setState(() => _hijriToGreg = false)),
-                  _toggleBtn('هجري ← ميلادي', _hijriToGreg,
+                  _toggleBtn(context, 'هجري ← ميلادي', _hijriToGreg,
                       () => setState(() => _hijriToGreg = true)),
                 ],
               ),
@@ -142,7 +143,9 @@ class _DateConverterPageState extends State<DateConverterPage> {
     );
   }
 
-  Widget _toggleBtn(String label, bool active, VoidCallback onTap) {
+  Widget _toggleBtn(
+      BuildContext context, String label, bool active, VoidCallback onTap) {
+    final brand = brandColor(context);
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -150,14 +153,14 @@ class _DateConverterPageState extends State<DateConverterPage> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: active ? _navy : Colors.transparent,
+            color: active ? brand : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: active ? Colors.white : _navy,
+              color: active ? Colors.white : brand,
               fontWeight: FontWeight.bold,
               fontSize: 13,
               fontFamily: 'ScheherazadeNew',
@@ -242,7 +245,7 @@ class _DateConverterPageState extends State<DateConverterPage> {
                         fontSize: 12,
                         color: isDark ? Colors.white60 : Colors.black54)),
                 const Spacer(),
-                const Icon(Icons.edit_calendar, size: 18, color: _navy),
+                Icon(Icons.edit_calendar, size: 18, color: isDark ? kBrandGold : kBrandNavy),
               ],
             ),
             const SizedBox(height: 12),
@@ -252,7 +255,7 @@ class _DateConverterPageState extends State<DateConverterPage> {
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'ScheherazadeNew',
-                color: isDark ? Colors.white : _navy,
+                color: isDark ? kBrandGold : kBrandNavy,
               ),
             ),
             const SizedBox(height: 4),

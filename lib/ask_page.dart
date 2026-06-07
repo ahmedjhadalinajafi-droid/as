@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'analytics_service.dart';
 import 'backend_config.dart';
 import 'islamic_background.dart';
+import 'brand.dart';
 import 'notification_service.dart';
 import 'photo_viewer.dart';
 
@@ -438,7 +439,7 @@ class _QACard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.help_outline_rounded, color: _navy, size: 20),
+                Icon(Icons.help_outline_rounded, color: brandColor(context), size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(question,
@@ -534,9 +535,9 @@ class _QACard extends StatelessWidget {
                   TextButton.icon(
                     onPressed: () => _openAnswerDialog(context, answered),
                     icon: Icon(answered ? Icons.edit : Icons.reply,
-                        size: 18, color: _navy),
+                        size: 18, color: brandColor(context)),
                     label: Text(answered ? 'تعديل' : 'رد',
-                        style: const TextStyle(color: _navy)),
+                        style: TextStyle(color: brandColor(context))),
                   ),
                   IconButton(
                     onPressed: () => _delete(context),
