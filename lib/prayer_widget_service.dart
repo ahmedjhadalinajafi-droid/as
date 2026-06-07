@@ -28,10 +28,13 @@ class PrayerWidgetService {
   /// Pushes the latest prayer data into the widget.
   ///
   /// [times] uses the same keys as the app: fajr, dhuhr, maghrib.
+  /// [dayName] and [date] are shown in the widget header and prayer page.
   static Future<void> update({
     required Map<String, String> times,
     required String nextPrayer,
     required String nextPrayerTime,
+    String dayName = '',
+    String date = '',
   }) async {
     if (kIsWeb) return;
     try {
@@ -44,6 +47,8 @@ class PrayerWidgetService {
           'next_prayer', nextPrayer.isEmpty ? 'الفجر' : nextPrayer);
       await HomeWidget.saveWidgetData<String>(
           'next_prayer_time', nextPrayerTime.isEmpty ? '--:--' : nextPrayerTime);
+      await HomeWidget.saveWidgetData<String>('day_name', dayName);
+      await HomeWidget.saveWidgetData<String>('date', date);
 
       await HomeWidget.updateWidget(
         androidName: _androidWidgetName,

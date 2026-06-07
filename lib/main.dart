@@ -553,6 +553,8 @@ class _HomePageState extends State<HomePage> {
   bool _loading = true;
   Timer? _countdownTimer;
   String _countdown = '';
+  String _displayDayName = '';
+  String _displayDate = '';
 
   static const _navy = Color(0xFF1B3D6F);
   static const _gold = Color(0xFFC9A843);
@@ -570,6 +572,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   static String _stripTz(String t) => t.split(' ').first;
+
+  static String _arabicDayName(DateTime d) {
+    const days = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+    return days[d.weekday - 1];
+  }
+
+  static String _formatDate(DateTime d) {
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
 
   String get _todayCacheKey {
     final now = DateTime.now();
@@ -687,9 +698,12 @@ class _HomePageState extends State<HomePage> {
 
   void _setPrayerTimes(Map<String, String> times) {
     if (!mounted) return;
+    final today = DateTime.now();
     setState(() {
       _todayPrayers = times;
       _loading = false;
+      _displayDayName = _arabicDayName(today);
+      _displayDate = _formatDate(today);
     });
     _findNextPrayer(times);
   }
@@ -721,24 +735,66 @@ class _HomePageState extends State<HomePage> {
           times: times,
           nextPrayer: _nextPrayer,
           nextPrayerTime: _nextPrayerTime,
+          dayName: _displayDayName,
+          date: _displayDate,
         );
         return;
       }
     }
-    if (!mounted) return;
-    setState(() {
-      _nextPrayer = 'الفجر';
-      _nextPrayerTime = times['fajr'] ?? '';
-    });
-    PrayerWidgetService.update(
-      times: times,
-      nextPrayer: _nextPrayer,
-      nextPrayerTime: _nextPrayerTime,
-    );
-    final parts = (times['fajr'] ?? '').split(':');
-    if (parts.length >= 2) {
-      _startCountdown(
-          int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
+    // All prayers passed — switch to tomorrow's Fajr
+    _loadTomorrowTimes();
+  }
+
+  Future<void> _loadTomorrowTimes() async {
+    try {
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      final docId =
+          '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
+      final raw = await rootBundle.loadString('assets/prayer_times_2026.json');
+      final all = json.decode(raw) as Map<String, dynamic>;
+      final data = all[docId];
+      if (data is! Map) throw Exception('no data for $docId');
+      final times = Map<String, String>.from(
+          data.map((k, v) => MapEntry(k.toString(), v.toString())));
+
+      final dayName = _arabicDayName(tomorrow);
+      final date = _formatDate(tomorrow);
+
+      if (!mounted) return;
+      setState(() {
+        _todayPrayers = times;
+        _displayDayName = dayName;
+        _displayDate = date;
+        _nextPrayer = 'الفجر';
+        _nextPrayerTime = times['fajr'] ?? '';
+      });
+
+      PrayerWidgetService.update(
+        times: times,
+        nextPrayer: 'الفجر',
+        nextPrayerTime: times['fajr'] ?? '',
+        dayName: dayName,
+        date: date,
+      );
+
+      final parts = (times['fajr'] ?? '').split(':');
+      if (parts.length >= 2) {
+        _startCountdown(int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
+      }
+    } catch (_) {
+      // Keep showing today's fajr as fallback
+      if (!mounted) return;
+      setState(() {
+        _nextPrayer = 'الفجر';
+        _nextPrayerTime = _todayPrayers['fajr'] ?? '';
+      });
+      PrayerWidgetService.update(
+        times: _todayPrayers,
+        nextPrayer: 'الفجر',
+        nextPrayerTime: _todayPrayers['fajr'] ?? '',
+        dayName: _displayDayName,
+        date: _displayDate,
+      );
     }
   }
 
@@ -940,6 +996,32 @@ class _HomePageState extends State<HomePage> {
       ),
       child: Column(
         children: [
+          if (_displayDayName.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _displayDayName,
+                  style: TextStyle(
+                    color: _gold,
+                    fontSize: 12,
+                    fontFamily: 'ScheherazadeNew',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _displayDate,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.65),
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
           Text(
             'وقت صلاة $_nextPrayer في بغداد',
             style: TextStyle(

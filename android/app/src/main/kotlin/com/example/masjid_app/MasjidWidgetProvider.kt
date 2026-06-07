@@ -30,12 +30,16 @@ class MasjidWidgetProvider : HomeWidgetProvider() {
                 val fajr = widgetData.getString("fajr", "--:--") ?: "--:--"
                 val dhuhr = widgetData.getString("dhuhr", "--:--") ?: "--:--"
                 val maghrib = widgetData.getString("maghrib", "--:--") ?: "--:--"
+                val dayName = widgetData.getString("day_name", "") ?: ""
+                val date = widgetData.getString("date", "") ?: ""
 
                 views.setTextViewText(R.id.w_next_prayer, nextPrayer)
                 views.setTextViewText(R.id.w_next_time, nextTime)
                 views.setTextViewText(R.id.w_fajr, fajr)
                 views.setTextViewText(R.id.w_dhuhr, dhuhr)
                 views.setTextViewText(R.id.w_maghrib, maghrib)
+                views.setTextViewText(R.id.w_day_name, dayName)
+                views.setTextViewText(R.id.w_date, date)
 
                 appWidgetManager.updateAppWidget(widgetId, views)
             } catch (e: Exception) {
