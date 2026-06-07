@@ -719,10 +719,15 @@ $tab = $_GET['tab'] ?? 'events';
         <button>نشر الإصدار</button>
       </form>
       <p class="muted">
-        إذا ظهر خطأ أن حجم الملف كبير، ارفع
+        حد الرفع مرفوع إلى ٢٠٠ ميجا عبر ملف <code>.user.ini</code> المرفق، فيكفي
+        لملف بحجم ٦٠ ميجا. إذا بقي الخطأ بعد دقائق، ارفع
         <code>upload_max_filesize</code> و <code>post_max_size</code> من لوحة
-        Hostinger ‹ <b>PHP Configuration</b> إلى قيمة أكبر من حجم الـ APK
-        (مثلاً 128M).
+        Hostinger ‹ <b>PHP Configuration</b>.
+        <br><br>
+        لتصغير الحجم: ابنِ نسخاً منفصلة لكل معالج بالأمر
+        <code>flutter build apk --split-per-abi</code> وارفع ملف
+        <code>app-arm64-v8a-release.apk</code> (حوالي ٢٠ ميجا، يعمل على معظم
+        الهواتف الحديثة).
       </p>
     </div>
 

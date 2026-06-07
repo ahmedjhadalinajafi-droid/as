@@ -1,5 +1,5 @@
-# Block direct download of sensitive files (service account, config, this file)
-<FilesMatch "\.(json|md)$">
+# Block direct download of sensitive files (service account, config, ini, docs)
+<FilesMatch "\.(json|md|ini)$">
     Require all denied
 </FilesMatch>
 

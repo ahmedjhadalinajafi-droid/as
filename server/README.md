@@ -66,10 +66,29 @@ You **build** the APK on your computer (Hostinger can't compile Flutter), then
 The panel saves the APK to your site root and rewrites `version.json`
 automatically, so the app's launch check offers the new download.
 
-> **Big APK?** If you see "حجم الملف أكبر من الحد المسموح", raise
-> `upload_max_filesize` and `post_max_size` in hPanel → **PHP Configuration**
-> to a value larger than the APK (e.g. 128M), then retry. A release APK is
-> usually 20–40 MB, which is under Hostinger's default.
+> **Big APK (e.g. 60 MB)?** The included `.user.ini` files raise the upload
+> limit to **200 MB**, so a 60 MB universal APK uploads fine. (LiteSpeed reads
+> `.user.ini`; the change can take ~5 minutes to take effect after upload.)
+> If it still fails, raise `upload_max_filesize` / `post_max_size` in hPanel →
+> **PHP Configuration**.
+
+### Smaller APK (optional)
+
+The default `flutter build apk --release` makes one **universal** APK (~60 MB)
+that contains every CPU architecture. To get much smaller files:
+
+```bash
+flutter build apk --split-per-abi
+```
+
+This produces separate APKs in `build/app/outputs/flutter-apk/`:
+
+- `app-arm64-v8a-release.apk`  (~20 MB) — virtually all phones from the last
+  ~7 years, including the OnePlus 9. **Upload this one.**
+- `app-armeabi-v7a-release.apk` — only very old 32-bit phones.
+
+Upload `app-arm64-v8a-release.apk` for a fast ~20 MB download. (Keep the
+universal APK if you need to support very old 32-bit devices.)
 
 You can still edit `version.json` by hand if you prefer.
 
