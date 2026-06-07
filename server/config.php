@@ -40,6 +40,22 @@ const UPLOAD_BASE_URL = 'https://ahlulbaytmosque.site/app/server/uploads';
 // Max upload size in bytes (5 MB).
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
+// GitHub Personal Access Token — used to trigger the "Build & Deploy APK"
+// GitHub Actions workflow from the admin panel.
+// Create one at: https://github.com/settings/tokens/new
+//   → Select scope: "Actions" → workflow (read + write)
+// Paste the token here (starts with ghp_ or github_pat_).
+const GITHUB_TOKEN = '';   // ← paste your token here
+
+// GitHub repo that holds the workflow (owner/repo format).
+const GITHUB_REPO = 'ahmedjhadalinajafi-droid/as';
+
+// The workflow file name inside .github/workflows/.
+const GITHUB_WORKFLOW = 'build_release.yml';
+
+// The branch the workflow checks out and builds from.
+const GITHUB_BRANCH = 'claude/masjid-app-setup-MHlkW';
+
 // --- helpers ---------------------------------------------------------------
 
 function require_secret(): void {

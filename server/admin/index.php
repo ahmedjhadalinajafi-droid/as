@@ -369,27 +369,73 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $cur   = read_version();
         $ver   = trim($_POST['version'] ?? $cur['version']);
         $build = max(1, (int)($_POST['build'] ?? ((int)$cur['build'] + 1)));
-        $pending = [
-            'version'   => $ver !== '' ? $ver : $cur['version'],
-            'build'     => $build,
-            'notes'     => trim($_POST['notes'] ?? ''),
-            'mandatory' => isset($_POST['mandatory']),
-            'notify'    => isset($_POST['notify']),
-            'requested' => date('c'),
-        ];
-        $serverRoot = dirname(__DIR__);
-        $ok = @file_put_contents(
-            $serverRoot . '/pending_build.json',
-            json_encode($pending, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
-        );
-        @file_put_contents($serverRoot . '/build_status.json', json_encode([
-            'status'  => 'pending',
-            'message' => 'في انتظار الخادم المحلي لبدء البناء...',
-            'updated' => date('c'),
-        ]));
-        $flash = $ok !== false
-            ? '✅ تم إرسال طلب البناء — سيبدأ الخادم المحلي خلال دقيقة.'
-            : '❌ تعذّر حفظ ملف الطلب (تحقق من صلاحيات الكتابة).';
+        $ver   = $ver !== '' ? $ver : $cur['version'];
+        $notes     = trim($_POST['notes'] ?? '');
+        $mandatory = isset($_POST['mandatory']) ? 'true' : 'false';
+        $notify    = isset($_POST['notify'])    ? 'true' : 'false';
+
+        if (!defined('GITHUB_TOKEN') || GITHUB_TOKEN === '') {
+            $flash = '❌ لم يُضبط GITHUB_TOKEN في config.php — راجع التعليمات أدناه.';
+        } else {
+            // Trigger GitHub Actions workflow_dispatch
+            $payload = json_encode([
+                'ref'    => GITHUB_BRANCH,
+                'inputs' => [
+                    'version'   => $ver,
+                    'build'     => (string)$build,
+                    'notes'     => $notes !== '' ? $notes
+                        : 'أحدث إصدار من تطبيق مسجد وحسينية أهل البيت',
+                    'mandatory' => $mandatory,
+                    'notify'    => $notify,
+                ],
+            ]);
+            $url = 'https://api.github.com/repos/' . GITHUB_REPO
+                . '/actions/workflows/' . GITHUB_WORKFLOW . '/dispatches';
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $payload,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER     => [
+                    'Authorization: Bearer ' . GITHUB_TOKEN,
+                    'Accept: application/vnd.github+json',
+                    'Content-Type: application/json',
+                    'X-GitHub-Api-Version: 2022-11-28',
+                    'User-Agent: MasjidApp-Admin/1.0',
+                ],
+                CURLOPT_TIMEOUT => 20,
+            ]);
+            $body    = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 204) {
+                // 204 No Content = GitHub accepted the trigger
+                $serverRoot = dirname(__DIR__);
+                @file_put_contents($serverRoot . '/build_status.json', json_encode([
+                    'status'  => 'building',
+                    'message' => "🔨 تم إرسال طلب البناء إلى GitHub Actions — سيستغرق 5-10 دقائق",
+                    'updated' => date('c'),
+                ]));
+                $actionsUrl = 'https://github.com/' . GITHUB_REPO . '/actions';
+                $flash = "✅ بدأ البناء على GitHub Actions (الإصدار $ver / build $build)"
+                    . " — <a href='$actionsUrl' target='_blank' style='color:#C9A843'>تابع التقدم هنا</a>";
+            } else {
+                $errMsg = '';
+                if ($body) {
+                    $decoded = json_decode($body, true);
+                    $errMsg = $decoded['message'] ?? $body;
+                }
+                $flash = "❌ فشل GitHub API (رمز $httpCode): " . h($errMsg);
+                if ($httpCode === 401) {
+                    $flash .= ' — تحقق من صحة GITHUB_TOKEN في config.php';
+                } elseif ($httpCode === 404) {
+                    $flash .= ' — تحقق من اسم المستودع والـ workflow في config.php';
+                } elseif ($httpCode === 422) {
+                    $flash .= ' — تأكد أن الـ workflow موجود في GitHub وأن الـ branch صحيح';
+                }
+            }
+        }
     }
 
     if ($action === 'cancel_build') {
@@ -775,12 +821,28 @@ $tab = $_GET['tab'] ?? 'events';
     </div>
 
     <?php if (!$isActive): ?>
+    <?php $tokenMissing = !defined('GITHUB_TOKEN') || GITHUB_TOKEN === ''; ?>
+    <?php if ($tokenMissing): ?>
+    <div class="card" style="border-right:4px solid #b45309">
+      <h3 style="margin-top:0;color:#b45309">⚠️ إعداد مطلوب — GitHub Token</h3>
+      <ol style="line-height:2">
+        <li>افتح <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--gold)">
+          github.com/settings/tokens/new</a></li>
+        <li>اختر: <b>Tokens (classic)</b></li>
+        <li>فعّل الصلاحية: <code>workflow</code> ✅</li>
+        <li>اضغط <b>Generate token</b> وانسخ الرمز (يبدأ بـ <code>ghp_</code>)</li>
+        <li>افتح ملف <code>server/config.php</code> على Hostinger</li>
+        <li>الصق الرمز داخل: <code>const GITHUB_TOKEN = '<b>ghp_...</b>';</code></li>
+        <li>احفظ الملف وأعد تحميل هذه الصفحة</li>
+      </ol>
+      <p class="muted">هذا مطلوب مرة واحدة فقط.</p>
+    </div>
+    <?php else: ?>
     <div class="card">
-      <h3 style="margin-top:0">🔨 بناء إصدار جديد تلقائياً (عبر الخادم المحلي)</h3>
+      <h3 style="margin-top:0">🚀 بناء إصدار جديد (GitHub Actions — مجاني)</h3>
       <p class="muted">
-        اضغط «طلب البناء» — سيتلقى الخادم المحلي الطلب خلال دقيقة، يسحب
-        الكود من GitHub، يبني APK جديد، يرفعه هنا، ويُرسل إشعار التحديث
-        لجميع المستخدمين تلقائياً.
+        اضغط «ابدأ البناء» — سيبني GitHub APK جديد تلقائياً ويرفعه هنا
+        ويُرسل إشعار التحديث لجميع المستخدمين. يستغرق ~٥ دقائق.
       </p>
       <form method="post">
         <input type="hidden" name="action" value="trigger_build">
@@ -794,13 +856,14 @@ $tab = $_GET['tab'] ?? 'events';
           <?= !empty($ver['mandatory']) ? 'checked' : '' ?>> تحديث إجباري</label><br>
         <label><input type="checkbox" name="notify" checked style="width:auto">
           🔔 إشعار «تحديث متوفر» لكل المستخدمين</label><br><br>
-        <button style="background:#1b7a4b">🔨 طلب البناء</button>
+        <button style="background:#1b7a4b;font-size:16px">🚀 ابدأ البناء</button>
       </form>
     </div>
+    <?php endif; ?>
 
     <details>
       <summary style="cursor:pointer;color:#5a6b88;padding:10px 0">
-        📦 رفع يدوي (إذا كان الخادم المحلي غير متاح)
+        📦 رفع يدوي (بديل إذا لم يعمل GitHub Actions)
       </summary>
       <div class="card" style="margin-top:8px">
         <form method="post" enctype="multipart/form-data"
