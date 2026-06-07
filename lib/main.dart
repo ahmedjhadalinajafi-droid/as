@@ -20,7 +20,6 @@ import 'analytics_service.dart';
 import 'announcements_page.dart';
 import 'ask_page.dart';
 import 'backend_config.dart';
-import 'campaigns_page.dart';
 import 'date_converter_page.dart';
 import 'events_page.dart';
 import 'trips_page.dart';
@@ -262,7 +261,7 @@ class _MainShellState extends State<MainShell> {
     PrayerTimesPage.new,
     SocialMediaPage.new,
     EventsPage.new,
-    CampaignsPage.new,
+    TripsPage.new,
     MorePage.new,
   ];
 
@@ -380,7 +379,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar>
     _NavItem(icon: Icons.access_time_outlined,selectedIcon: Icons.access_time_filled,   label: 'الصلاة'),
     _NavItem(icon: Icons.people_outline,      selectedIcon: Icons.people_rounded,       label: 'تواصل'),
     _NavItem(icon: Icons.event_outlined,      selectedIcon: Icons.event_rounded,        label: 'الفعاليات'),
-    _NavItem(icon: Icons.directions_bus_outlined, selectedIcon: Icons.directions_bus_filled, label: 'الحملات'),
+    _NavItem(icon: Icons.directions_bus_outlined, selectedIcon: Icons.directions_bus_filled, label: 'الرحلات'),
     _NavItem(icon: Icons.grid_view_outlined,  selectedIcon: Icons.grid_view_rounded,    label: 'المزيد'),
   ];
 
@@ -2231,12 +2230,6 @@ class MorePage extends StatelessWidget {
         label: 'الزيارات',
         color: const Color(0xFF795548),
         page: const ZiyaratPage(),
-      ),
-      _MoreItem(
-        icon: Icons.directions_bus_filled,
-        label: 'الرحلات',
-        color: const Color(0xFF00897B),
-        page: const TripsPage(),
       ),
       _MoreItem(
         icon: Icons.question_answer_rounded,

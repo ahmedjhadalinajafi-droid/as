@@ -46,12 +46,6 @@ List<TripContact> _parseContacts(String raw) {
   return out;
 }
 
-// Label for a booking button: prefer the holder's name when present.
-String _bookLabel(TripContact c, int total) {
-  if (c.name.isNotEmpty) return 'احجز مع ${c.name}';
-  return total == 1 ? 'احجز الآن' : 'احجز: ${c.number}';
-}
-
 // ─── Trips Page ────────────────────────────────────────────────────────────────
 
 class TripsPage extends StatefulWidget {
@@ -257,19 +251,32 @@ class _TripCard extends StatelessWidget {
     await FirebaseFirestore.instance.collection('trips').doc(docId).delete();
   }
 
-  Future<void> _book(String contact) async {
-    final digits = contact.replaceAll(RegExp(r'[^0-9+]'), '');
+  // Opens WhatsApp chat with the given number.
+  Future<void> _whatsapp(BuildContext context, String number) async {
+    final digits = number.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return;
     Analytics.tripBooked(data['destination'] as String? ?? '');
-    // Prefer WhatsApp, fall back to a normal phone dial.
-    final wa = Uri.parse('https://wa.me/${digits.replaceAll('+', '')}');
-    if (await canLaunchUrl(wa)) {
-      await launchUrl(wa, mode: LaunchMode.externalApplication);
-      return;
+    final uri = Uri.parse('https://wa.me/$digits');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      _toast(context, 'تعذّر فتح واتساب');
     }
-    final tel = Uri.parse('tel:$digits');
-    if (await canLaunchUrl(tel)) {
-      await launchUrl(tel, mode: LaunchMode.externalApplication);
+  }
+
+  // Opens the phone dialer with the given number.
+  Future<void> _call(BuildContext context, String number) async {
+    final digits = number.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (digits.isEmpty) return;
+    Analytics.tripBooked(data['destination'] as String? ?? '');
+    final uri = Uri.parse('tel:$digits');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      _toast(context, 'تعذّر فتح الاتصال');
+    }
+  }
+
+  void _toast(BuildContext context, String msg) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg), behavior: SnackBarBehavior.floating));
     }
   }
 
@@ -520,25 +527,68 @@ class _TripCard extends StatelessWidget {
                     ],
                   ),
 
-                  // Booking buttons — one per contact (name + number)
+                  // Booking — for each contact: name + WhatsApp + Call buttons
                   if (!isPast && contacts.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     for (int i = 0; i < contacts.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _book(contacts[i].number),
-                          icon: const Icon(Icons.chat, size: 18),
-                          label: Text(_bookLabel(contacts[i], contacts.length)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1B7A4B),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                      if (i > 0) const SizedBox(height: 10),
+                      if (contacts[i].name.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.person, size: 15, color: _gold),
+                              const SizedBox(width: 5),
+                              Expanded(
+                                child: Text(
+                                  contacts[i].name,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: cs.onSurface.withOpacity(0.75),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
+                      Row(
+                        children: [
+                          // WhatsApp
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () =>
+                                  _whatsapp(context, contacts[i].number),
+                              icon: const Icon(Icons.chat, size: 18),
+                              label: const Text('واتساب'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF25D366),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 11),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Call
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => _call(context, contacts[i].number),
+                              icon: const Icon(Icons.call, size: 18),
+                              label: const Text('اتصال'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _navy,
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 11),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ],

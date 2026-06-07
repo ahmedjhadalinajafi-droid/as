@@ -189,14 +189,15 @@ class NotificationService {
       final raw = await rootBundle.loadString('assets/prayer_times_2026.json');
       final allTimes = json.decode(raw) as Map<String, dynamic>;
 
-      // Cancel only prayer-time notifications (IDs 0–69), keep push ones
-      for (int i = 0; i < 70; i++) {
+      // Cancel only prayer-time notifications (IDs 0–99), keep push ones
+      for (int i = 0; i < 100; i++) {
         await _local.cancel(i);
       }
 
       final now = tz.TZDateTime.now(tz.local);
 
-      for (int day = 0; day < 7; day++) {
+      // Schedule the next 10 days so alarms don't run out between app opens.
+      for (int day = 0; day < 10; day++) {
         final date = now.add(Duration(days: day));
         final key =
             '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
