@@ -292,6 +292,28 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST') {
         fs_delete('quran_audio', (string)(int)($_POST['surah'] ?? 0));
         $flash = 'تم حذف التلاوة';
     }
+
+    if ($action === 'add_slide') {
+        // Use an uploaded file if given, otherwise a pasted image URL.
+        $img = admin_save_image('image');
+        if ($img === '') $img = trim($_POST['imageUrl'] ?? '');
+        if ($img === '') {
+            $flash = '❌ ارفع صورة أو ألصق رابط صورة';
+        } else {
+            $res = fs_add('home_slider', [
+                'imageUrl'  => $img,
+                'title'     => trim($_POST['title'] ?? ''),
+                'order'     => (int)($_POST['order'] ?? 0),
+                'createdAt' => new DateTime(),
+            ]);
+            $flash = fs_flash($res, 'تمت إضافة الصورة إلى السلايدر');
+        }
+    }
+
+    if ($action === 'delete_slide') {
+        fs_delete('home_slider', $_POST['id']);
+        $flash = 'تم حذف الصورة من السلايدر';
+    }
 }
 
 function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
@@ -372,6 +394,7 @@ $tab = $_GET['tab'] ?? 'events';
     <a href="?tab=trips" class="<?= $tab==='trips'?'active':'' ?>">الرحلات</a>
     <a href="?tab=announcements" class="<?= $tab==='announcements'?'active':'' ?>">الإعلانات</a>
     <a href="?tab=questions" class="<?= $tab==='questions'?'active':'' ?>">الأسئلة</a>
+    <a href="?tab=slider" class="<?= $tab==='slider'?'active':'' ?>">معرض الصور</a>
     <a href="?tab=quran" class="<?= $tab==='quran'?'active':'' ?>">القرآن</a>
     <a href="?tab=notify" class="<?= $tab==='notify'?'active':'' ?>">الإشعارات</a>
   </div>
@@ -485,6 +508,41 @@ $tab = $_GET['tab'] ?? 'events';
           · <?= h($t['date'] ?? '') ?>
         </div>
         <?php if (!empty($t['description'])): ?><p><?= h($t['description']) ?></p><?php endif; ?>
+      </div>
+    <?php endforeach; ?>
+
+  <?php elseif ($tab === 'slider'): ?>
+    <div class="card">
+      <h3 style="margin-top:0">🖼️ إضافة صورة إلى معرض الصور (السلايدر)</h3>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="add_slide">
+        <label>ارفع صورة من جهازك</label>
+        <input type="file" name="image" accept="image/*">
+        <label>أو ألصق رابط صورة موجودة (نفس الصور التي لديك على الموقع)</label>
+        <input name="imageUrl" placeholder="https://ahlulbaytmosque.site/app/server/uploads/...">
+        <label>عنوان (اختياري — يظهر فوق الصورة)</label>
+        <input name="title">
+        <label>الترتيب (رقم أصغر يظهر أولاً)</label>
+        <input type="number" name="order" value="0">
+        <button>إضافة الصورة</button>
+      </form>
+      <p class="muted">إذا رفعت صورة ورابطاً معاً، تُستخدم الصورة المرفوعة.</p>
+    </div>
+    <?php
+      $slides = fs_list('home_slider');
+      usort($slides, fn($a,$b) => ((int)($a['order']??0)) <=> ((int)($b['order']??0)));
+      foreach ($slides as $s): ?>
+      <div class="card">
+        <?php if (!empty($s['imageUrl'])): ?><img src="<?= h($s['imageUrl']) ?>"><?php endif; ?>
+        <div class="row">
+          <strong><?= h($s['title'] ?? '') ?: 'بدون عنوان' ?>
+            <span class="muted">(ترتيب: <?= h($s['order'] ?? 0) ?>)</span></strong>
+          <form method="post" onsubmit="return confirm('حذف الصورة؟')">
+            <input type="hidden" name="action" value="delete_slide">
+            <input type="hidden" name="id" value="<?= h($s['_id']) ?>">
+            <button class="danger">حذف</button>
+          </form>
+        </div>
       </div>
     <?php endforeach; ?>
 
