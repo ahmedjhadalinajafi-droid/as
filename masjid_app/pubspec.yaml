@@ -1,0 +1,44 @@
+name: masjid_app
+description: Ahlul Bayt Mosque app - Baghdad Al-Mansour
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Islamic features
+  adhan: ^2.0.0
+  quran: ^1.4.1
+
+  # Location & compass
+  geolocator: ^14.0.0
+
+  # UI & animations
+  flutter_animate: ^4.5.0
+  google_fonts: ^6.1.0
+
+  # State management
+  provider: ^6.1.1
+
+  # Permissions
+  permission_handler: ^11.0.0
+
+  # Notifications
+  flutter_local_notifications: ^16.3.0
+
+  # Utilities
+  intl: ^0.19.0
+  url_launcher: ^6.2.0
+  shared_preferences: ^2.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
